@@ -1,0 +1,24 @@
+import time
+import board
+import busio
+import adafruit_ads1x15.ads1115 as ADS
+from adafruit_ads1x15.analog_in import AnalogIn
+
+i2c = busio.I2C(board.SCL, board.SDA)
+ads = ADS.ADS1115(i2c)
+
+capteur_pluie = AnalogIn(ads, 0)
+capteur_sol = AnalogIn(ads, 1)
+
+while True:
+    try:
+        pluie = capteur_pluie.value
+        sol = capteur_sol.value
+        pourcentage_sol = round((1 - sol / 32767) * 100, 1)
+        etat_pluie = "PLUIE" if pluie < 26500 else "PAS DE PLUIE"
+        print(f"Pluie: {pluie} | {etat_pluie}")
+        print(f"Sol: {sol} | {pourcentage_sol}%")
+        print("-" * 30)
+    except Exception as e:
+        print(f"Erreur: {e}")
+    time.sleep(1)
