@@ -1,0 +1,18 @@
+import time
+import board
+import busio
+import adafruit_ads1x15.ads1115 as ADS
+from adafruit_ads1x15.analog_in import AnalogIn
+
+i2c = busio.I2C(board.SCL, board.SDA)
+ads = ADS.ADS1115(i2c)
+sol = AnalogIn(ads, 1)
+
+while True:
+    try:
+        valeur = sol.value
+        pourcentage = round((1 - valeur / 32767) * 100, 1)
+        print(f"Sol: {pourcentage}%")
+    except Exception as e:
+        print(f"Erreur: {e}")
+    time.sleep(2)
