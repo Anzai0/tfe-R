@@ -1,0 +1,18 @@
+import time
+import board
+import busio
+import adafruit_ads1x15.ads1115 as ADS
+from adafruit_ads1x15.analog_in import AnalogIn
+
+i2c = busio.I2C(board.SCL, board.SDA)
+ads = ADS.ADS1115(i2c)
+capteur = AnalogIn(ads, 0)
+
+while True:
+    try:
+        valeur = capteur.value
+        etat = "PLUIE" if valeur < 26500 else "PAS DE PLUIE"
+        print(f"Valeur: {valeur} | {etat}")
+    except Exception as e:
+        print(f"Erreur: {e}")
+    time.sleep(0.5)
