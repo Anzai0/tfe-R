@@ -1,0 +1,20 @@
+# -*- coding: utf-8 -*-
+import time
+import board
+import digitalio
+
+in2 = digitalio.DigitalInOut(board.D18)
+in2.direction = digitalio.Direction.OUTPUT
+
+try:
+    while True:
+        in2.value = True
+        print("Pompe ON")
+        time.sleep(1)
+        in2.value = False
+        print("Pompe OFF")
+        time.sleep(1)
+finally:
+    in2.value = False
+    in2.deinit()
+    print("Pompe eteinte")
