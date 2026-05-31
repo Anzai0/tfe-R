@@ -1,0 +1,11 @@
+import time
+import board
+from pwmio import PWMOut
+
+buzzer = PWMOut(board.D27, frequency=2000, duty_cycle=0)
+
+while True:
+    buzzer.duty_cycle = 65535
+    time.sleep(0.5)
+    buzzer.duty_cycle = 0
+    time.sleep(0.5)
