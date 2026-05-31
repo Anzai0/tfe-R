@@ -1,0 +1,20 @@
+# -*- coding: utf-8 -*-
+import time
+import board
+import digitalio
+
+ventilateur = digitalio.DigitalInOut(board.D24)
+ventilateur.direction = digitalio.Direction.OUTPUT
+
+try:
+    while True:
+        ventilateur.value = True
+        print("Ventilateur ON")
+        time.sleep(5)
+        ventilateur.value = False
+        print("Ventilateur OFF")
+        time.sleep(5)
+finally:
+    ventilateur.value = False
+    ventilateur.deinit()
+    print("Ventilateur eteint")
