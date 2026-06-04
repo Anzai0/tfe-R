@@ -84,70 +84,54 @@ def gradient_frame(parent, height=2, colors=None):
     return f
 
 # ══════════════════════════════════════════
-# CONSOLE MODERNE
+# CONSOLE INTEGREE
 # ══════════════════════════════════════════
-class ModernConsole(tk.Toplevel):
+class ConsolePanel(tk.Frame):
     def __init__(self, parent):
-        super().__init__(parent)
-        self.title("🖥️  CONSOLE SERRE")
-        self.geometry("800x500")
-        self.configure(bg=C["fond"])
-        self.resizable(True, True)
-        
-        # Logs
+        super().__init__(parent, bg=C["carte"])
         self.logs = []
-        
         self._build()
         self.log_event("🟢 Console demarree", "success")
 
     def _build(self):
         # HEADER
-        hdr = tk.Frame(self, bg=C["carte"], padx=20, pady=12)
+        hdr = tk.Frame(self, bg=C["carte3"], padx=15, pady=12)
         hdr.pack(fill="x")
         
         tk.Label(
             hdr,
-            text="🖥️  MONITEUR SYSTEME",
-            font=("Courier New", 13, "bold"),
-            bg=C["carte"],
+            text="🖥️  CONSOLE",
+            font=("Segoe UI", 11, "bold"),
+            bg=C["carte3"],
             fg=C["cyan"]
-        ).pack(side="left")
-        
-        btn_clear = tk.Button(
-            hdr,
-            text="EFFACER",
-            command=self.clear_logs,
-            padx=10,
-            pady=5
-        )
-        btn_style(btn_clear, bg=C["rouge"])
-        btn_clear.pack(side="right")
+        ).pack(anchor="w")
         
         # GRADIENT
-        gradient_frame(self)
+        tk.Frame(self, bg=C["accent"], height=1).pack(fill="x")
         
         # ZONE LOGS
-        wrap = tk.Frame(self, bg=C["fond"])
-        wrap.pack(fill="both", expand=True, padx=0)
+        wrap = tk.Frame(self, bg=C["fond2"])
+        wrap.pack(fill="both", expand=True)
         
         self.text = tk.Text(
             wrap,
             bg=C["fond2"],
             fg=C["cyan"],
-            font=("Courier New", 9),
+            font=("Courier New", 8),
             insertbackground=C["accent"],
             wrap="word",
             relief="flat",
             bd=0,
-            padx=15,
-            pady=10,
-            highlightthickness=0
+            padx=10,
+            pady=8,
+            highlightthickness=0,
+            state="disabled"
         )
         self.text.pack(fill="both", expand=True, side="left")
         
         # SCROLLBAR
         sb = tk.Scrollbar(wrap, command=self.text.yview, bg=C["carte"], troughcolor=C["fond2"])
-        sb.pack(side="right", fill="y")
+        sb.pack(side="right", fill="y", padx=(0, 2))
         self.text.configure(yscrollcommand=sb.set)
         
         # TAGS COULEURS
@@ -156,6 +140,10 @@ class ModernConsole(tk.Toplevel):
         self.text.tag_configure("info", foreground=C["bleu"])
         self.text.tag_configure("warning", foreground=C["orange"])
         self.text.tag_configure("time", foreground=C["gris"])
+        self.text.tag_configure("firebase", foreground=C["rose"])
+        self.text.tag_configure("capteur", foreground=C["orange"])
+        self.text.tag_configure("pompe", foreground=C["bleu"])
+        self.text.tag_configure("ventilo", foreground=C["cyan"])
 
     def log_event(self, message, log_type="info"):
         """Ajoute un log"""
@@ -174,11 +162,12 @@ class ModernConsole(tk.Toplevel):
         
         icon = icons.get(log_type, "•")
         
-        # Ajouter au text widget
+        self.text.configure(state="normal")
         self.text.insert("end", f"[{timestamp}] ", "time")
         self.text.insert("end", f"{icon} ", log_type)
         self.text.insert("end", f"{message}\n", log_type)
         self.text.see("end")
+        self.text.configure(state="disabled")
         
         self.logs.append({
             "time": timestamp,
@@ -186,12 +175,6 @@ class ModernConsole(tk.Toplevel):
             "message": message,
             "icon": icon
         })
-
-    def clear_logs(self):
-        """Efface les logs"""
-        self.text.delete("1.0", "end")
-        self.logs = []
-        self.log_event("Console effacee", "success")
 
 
 # ══════════════════════════════════════════
@@ -428,9 +411,14 @@ class PageDashboard(tk.Frame):
 
     def _build_ui(self):
         """Construit l'interface"""
-        # HEADER MODERNE
+        # CONTAINER PRINCIPAL AVEC DEUX COLONNES
+        self.columnconfigure(0, weight=3)
+        self.columnconfigure(1, weight=1)
+        self.rowconfigure(1, weight=1)
+
+        # ===== HEADER FULL WIDTH =====
         hdr = tk.Frame(self, bg=C["carte"], padx=25, pady=18)
-        hdr.pack(fill="x")
+        hdr.grid(row=0, column=0, columnspan=2, sticky="ew")
 
         left = tk.Frame(hdr, bg=C["carte"])
         left.pack(side="left")
@@ -453,29 +441,22 @@ class PageDashboard(tk.Frame):
             fg=C["gris"]
         ).pack(side="left", padx=15)
 
-        btn_console = tk.Button(
-            right,
-            text="🖥️  CONSOLE",
-            command=self._open_console,
-            pady=7,
-            padx=12
-        )
-        btn_style(btn_console, bg=C["bleu"])
-        btn_console.pack(side="left", padx=5)
-
         btn_dc = tk.Button(right, text="🚪 DECONNEXION", command=self.on_deconn, pady=7, padx=12)
         btn_style(btn_dc, bg=C["rouge"], fg=C["texte"])
         btn_dc.pack(side="left", padx=5)
 
         # GRADIENT
-        gradient_frame(self, height=3)
+        gradient = tk.Frame(self, bg=C["accent"], height=2)
+        gradient.grid(row=1, column=0, columnspan=2, sticky="ew", padx=0, pady=0)
+
+        # ===== COLONNE GAUCHE (MAIN CONTENT) =====
+        left_frame = tk.Frame(self, bg=C["fond"])
+        left_frame.grid(row=2, column=0, sticky="nsew", padx=0, pady=0)
+        left_frame.columnconfigure(0, weight=1)
 
         # SCROLL AREA
-        wrap = tk.Frame(self, bg=C["fond"])
-        wrap.pack(fill="both", expand=True)
-
-        canvas = tk.Canvas(wrap, bg=C["fond"], highlightthickness=0, bd=0)
-        sb = tk.Scrollbar(wrap, orient="vertical", command=canvas.yview, bg=C["carte"], troughcolor=C["fond2"])
+        canvas = tk.Canvas(left_frame, bg=C["fond"], highlightthickness=0, bd=0)
+        sb = tk.Scrollbar(left_frame, orient="vertical", command=canvas.yview, bg=C["carte"], troughcolor=C["fond2"])
         self.inner = tk.Frame(canvas, bg=C["fond"])
 
         self.inner.bind("<Configure>",
@@ -515,13 +496,16 @@ class PageDashboard(tk.Frame):
         )
         self.lbl_statut.pack(pady=(10, 25))
 
-        self._hide_sections()
+        # ===== COLONNE DROITE (CONSOLE) =====
+        console_frame = tk.Frame(self, bg=C["carte"])
+        console_frame.grid(row=2, column=1, sticky="nsew", padx=3, pady=3)
+        console_frame.columnconfigure(0, weight=1)
+        console_frame.rowconfigure(0, weight=1)
 
-    def _open_console(self):
-        """Ouvre la console"""
-        if self.console is None or not self.console.winfo_exists():
-            self.console = ModernConsole(self.master)
-        self.console.lift()
+        self.console = ConsolePanel(console_frame)
+        self.console.grid(row=0, column=0, sticky="nsew")
+
+        self._hide_sections()
 
     def _hide_sections(self):
         """Cache les sections"""
@@ -628,27 +612,35 @@ class PageDashboard(tk.Frame):
 
     def _section_plantes(self):
         """Section gestion plantes"""
-        outer = self._card(self.inner, titre="🌱 MES PLANTES (0/3)")
+        outer = self._card(self.inner, titre="🌱 MES PLANTES")
         outer._is_section = True
-        self.plantes_title = outer
+        self.plantes_container = outer
 
-        if len(self.plantes) < 3:
-            btn_add = tk.Button(
-                outer,
-                text="➕ AJOUTER UNE PLANTE",
-                command=self._popup_plante,
-                pady=8
-            )
-            btn_style(btn_add, bg=C["bleu"])
-            btn_add.pack(fill="x", pady=(0, 14))
-        else:
-            tk.Label(
-                outer,
-                text="🔒 Maximum 3 plantes atteint",
-                font=("Segoe UI", 9),
-                bg=C["carte"],
-                fg=C["orange"]
-            ).pack(anchor="w", pady=(0, 12))
+        # COMPTEUR + BOUTON
+        top_bar = tk.Frame(outer, bg=C["carte"])
+        top_bar.pack(fill="x", pady=(0, 14))
+
+        # Compteur
+        compteur_frame = tk.Frame(top_bar, bg=C["carte2"], padx=12, pady=8)
+        compteur_frame.pack(side="left")
+        self.lbl_compteur = tk.Label(
+            compteur_frame,
+            text="📊 0/3",
+            font=("Segoe UI", 11, "bold"),
+            bg=C["carte2"],
+            fg=C["accent"]
+        )
+        self.lbl_compteur.pack()
+
+        # Bouton ajouter
+        self.btn_add_plante = tk.Button(
+            top_bar,
+            text="➕ AJOUTER PLANTE",
+            command=self._popup_plante,
+            pady=8
+        )
+        btn_style(self.btn_add_plante, bg=C["bleu"])
+        self.btn_add_plante.pack(side="right", padx=(8, 0))
 
         self.frame_liste = tk.Frame(outer, bg=C["carte"])
         self.frame_liste.pack(fill="x")
@@ -693,6 +685,18 @@ class PageDashboard(tk.Frame):
         for w in self.frame_liste.winfo_children():
             w.destroy()
 
+        # Update compteur
+        self.lbl_compteur.configure(text=f"📊 {len(self.plantes)}/3")
+
+        # Update bouton
+        if len(self.plantes) >= 3:
+            self.btn_add_plante.configure(state="disabled", bg=C["gris2"], text="🔒 MAX ATTEINT")
+            self.btn_add_plante.configure(cursor="arrow")
+        else:
+            self.btn_add_plante.configure(state="normal", bg=C["bleu"], text="➕ AJOUTER PLANTE")
+            btn_style(self.btn_add_plante, bg=C["bleu"])
+            self.btn_add_plante.configure(cursor="hand2")
+
         if not self.plantes:
             tk.Label(
                 self.frame_liste,
@@ -703,7 +707,7 @@ class PageDashboard(tk.Frame):
             ).pack(pady=20)
             return
 
-        for plante in self.plantes:
+        for idx, plante in enumerate(self.plantes):
             actif = self.plante_active and self.plante_active["nom"] == plante["nom"]
             border_color = C["accent"] if actif else C["gris2"]
 
@@ -715,9 +719,10 @@ class PageDashboard(tk.Frame):
             top = tk.Frame(inner, bg=inner.cget("bg"))
             top.pack(fill="x")
 
+            # Numero + nom
             tk.Label(
                 top,
-                text=f"🌿 {plante['nom']}",
+                text=f"🌿 [{idx+1}/3] {plante['nom']}",
                 font=("Segoe UI", 12, "bold"),
                 bg=inner.cget("bg"),
                 fg=C["accent"] if actif else C["texte"]
@@ -736,7 +741,7 @@ class PageDashboard(tk.Frame):
             info_frame.pack(fill="x", pady=(10, 0))
 
             for label, val, unit, ico in [
-                ("Temp max", plante["temp_max"], "C", "🌡️"),
+                ("Temp max", plante["temp_max"], "°C", "🌡️"),
                 ("Hum min", plante["humidite_min"], "%", "💨"),
                 ("Eau min", plante["eau_min"], "%", "💧"),
             ]:
@@ -810,7 +815,7 @@ class PageDashboard(tk.Frame):
 
         champs = [
             ("🌿 NOM DE LA PLANTE", "nom", ""),
-            ("🌡️  TEMPERATURE MAX (C)", "temp_max", "30"),
+            ("🌡️  TEMPERATURE MAX (°C)", "temp_max", "30"),
             ("💨 HUMIDITE MINI (%)", "humidite_min", "50"),
             ("💧 EAU MINI (%)", "eau_min", "30"),
         ]
@@ -871,16 +876,13 @@ class PageDashboard(tk.Frame):
                     if not self.plante_active:
                         self.plante_active = self.plantes[0]
                     self.after(0, self._afficher_plantes)
-                    self.after(0, self._update_plantes_count)
                     
-                    if self.console:
-                        self.console.log_event(f"Plante '{nom}' ajoutee avec succes", "success")
+                    self.console.log_event(f"Plante '{nom}' ajoutee [✓]", "success")
                     
                     pop.destroy()
                 except Exception as e:
                     self.after(0, lambda: lbl_err.configure(text=f"❌ Erreur: {e}"))
-                    if self.console:
-                        self.console.log_event(f"Erreur ajout plante: {e}", "error")
+                    self.console.log_event(f"Erreur ajout plante: {e}", "error")
 
             threading.Thread(target=save_firebase, daemon=True).start()
 
@@ -892,8 +894,7 @@ class PageDashboard(tk.Frame):
         """Selectionne une plante"""
         self.plante_active = plante
         self._afficher_plantes()
-        if self.console:
-            self.console.log_event(f"Plante '{plante['nom']}' selectionnee", "info")
+        self.console.log_event(f"Plante '{plante['nom']}' selectionnee", "info")
 
     def _supprimer(self, plante):
         """Supprime une plante"""
@@ -907,24 +908,12 @@ class PageDashboard(tk.Frame):
                 if self.plante_active and self.plante_active["nom"] == plante["nom"]:
                     self.plante_active = self.plantes[0] if self.plantes else None
                 self.after(0, self._afficher_plantes)
-                self.after(0, self._update_plantes_count)
                 
-                if self.console:
-                    self.console.log_event(f"Plante '{plante['nom']}' supprimee", "warning")
+                self.console.log_event(f"Plante '{plante['nom']}' supprimee", "warning")
             except Exception as e:
-                if self.console:
-                    self.console.log_event(f"Erreur suppression: {e}", "error")
+                self.console.log_event(f"Erreur suppression: {e}", "error")
 
         threading.Thread(target=delete_firebase, daemon=True).start()
-
-    def _update_plantes_count(self):
-        """Met a jour le compteur"""
-        try:
-            self.plantes_title.winfo_children()[0].configure(
-                text=f"🌱 MES PLANTES ({len(self.plantes)}/3)"
-            )
-        except:
-            pass
 
     def _toggle_pompe(self):
         """Active/desactive la pompe"""
@@ -932,13 +921,11 @@ class PageDashboard(tk.Frame):
         if self.pompe_active:
             self.lbl_pompe.configure(text="● MARCHE", fg=C["vert"])
             self.btn_pompe.configure(text="⏹️  ARRETER", bg=C["rouge"])
-            if self.console:
-                self.console.log_event("Pompe activee ✓", "pompe")
+            self.console.log_event("Pompe activee ✓", "pompe")
         else:
             self.lbl_pompe.configure(text="● ARRÊT", fg=C["rouge"])
             self.btn_pompe.configure(text="▶️  ACTIVER", bg=C["vert"])
-            if self.console:
-                self.console.log_event("Pompe desactivee ✗", "pompe")
+            self.console.log_event("Pompe desactivee ✗", "pompe")
         self._cmd("pompe", self.pompe_active)
 
     def _toggle_ventilo(self):
@@ -947,13 +934,11 @@ class PageDashboard(tk.Frame):
         if self.ventilo_actif:
             self.lbl_ventilo.configure(text="● MARCHE", fg=C["vert"])
             self.btn_ventilo.configure(text="⏹️  ARRETER", bg=C["rouge"])
-            if self.console:
-                self.console.log_event("Ventilateur active ✓", "ventilo")
+            self.console.log_event("Ventilateur active ✓", "ventilo")
         else:
             self.lbl_ventilo.configure(text="● ARRÊT", fg=C["rouge"])
             self.btn_ventilo.configure(text="▶️  ACTIVER", bg=C["vert"])
-            if self.console:
-                self.console.log_event("Ventilateur desactive ✗", "ventilo")
+            self.console.log_event("Ventilateur desactive ✗", "ventilo")
         self._cmd("ventilateur", self.ventilo_actif)
 
     def _cmd(self, appareil, etat):
@@ -970,7 +955,6 @@ class PageDashboard(tk.Frame):
         if not self.loading:
             self.after(0, self._show_sections)
             self._afficher_plantes()
-            self._update_plantes_count()
 
         def tache():
             try:
@@ -1037,10 +1021,10 @@ class PageDashboard(tk.Frame):
 class App:
     def __init__(self):
         self.fen = tk.Tk()
-        self.fen.title("🌿 Serre Connectee v2.1")
+        self.fen.title("🌿 Serre Connectee v2.2")
         self.fen.configure(bg=C["fond"])
-        self.fen.geometry("1100x750")
-        self.fen.minsize(900, 600)
+        self.fen.geometry("1400x800")
+        self.fen.minsize(1200, 700)
         self.fen.resizable(True, True)
 
         self.page = None
