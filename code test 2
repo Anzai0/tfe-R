@@ -11,18 +11,17 @@ import json
 try:
     import RPi.GPIO as GPIO
     GPIO.setmode(GPIO.BCM)
+    GPIO.setwarnings(False)
     RASPBERRY_OK = True
+    print("✅ GPIO OK")
 except:
     RASPBERRY_OK = False
-    print("⚠️  GPIO non disponible (mode simulation)")
+    print("⚠️  GPIO simulation mode")
 
 # ===== PINS GPIO =====
 PIN_POMPE = 17
 PIN_VENTILO = 27
 PIN_BUZZER = 22
-PIN_TEMP = 4
-PIN_HUM = 23
-PIN_PLUIE = 24
 
 # ===== FIREBASE CONFIG =====
 firebase_config = {
@@ -76,25 +75,30 @@ class GPIOManager:
                 GPIO.setup(PIN_POMPE, GPIO.OUT, initial=GPIO.LOW)
                 GPIO.setup(PIN_VENTILO, GPIO.OUT, initial=GPIO.LOW)
                 GPIO.setup(PIN_BUZZER, GPIO.OUT, initial=GPIO.LOW)
+                print("✅ Pins initialises")
             except Exception as e:
-                print(f"Erreur GPIO init: {e}")
+                print(f"❌ Erreur GPIO init: {e}")
     
     def toggle_pompe(self):
         self.pompe_on = not self.pompe_on
+        print(f"🔧 Pompe: {self.pompe_on}")
         if RASPBERRY_OK:
             try:
                 GPIO.output(PIN_POMPE, GPIO.HIGH if self.pompe_on else GPIO.LOW)
+                print(f"✅ GPIO17 set to {GPIO.HIGH if self.pompe_on else GPIO.LOW}")
             except Exception as e:
-                print(f"Erreur pompe: {e}")
+                print(f"❌ Erreur pompe: {e}")
         return self.pompe_on
     
     def toggle_ventilo(self):
         self.ventilo_on = not self.ventilo_on
+        print(f"🔧 Ventilo: {self.ventilo_on}")
         if RASPBERRY_OK:
             try:
                 GPIO.output(PIN_VENTILO, GPIO.HIGH if self.ventilo_on else GPIO.LOW)
+                print(f"✅ GPIO27 set to {GPIO.HIGH if self.ventilo_on else GPIO.LOW}")
             except Exception as e:
-                print(f"Erreur ventilo: {e}")
+                print(f"❌ Erreur ventilo: {e}")
         return self.ventilo_on
     
     def buzz(self, duree=0.5):
@@ -108,7 +112,10 @@ class GPIOManager:
     
     def cleanup(self):
         if RASPBERRY_OK:
-            GPIO.cleanup()
+            try:
+                GPIO.cleanup()
+            except:
+                pass
 
 gpio = GPIOManager()
 
@@ -174,7 +181,7 @@ class ConsolePanel(tk.Frame):
             wrap,
             bg=C["fond2"],
             fg=C["cyan"],
-            font=("Courier New", 7),
+            font=("Courier New", 8),
             insertbackground=C["accent"],
             wrap="word",
             relief="flat",
@@ -202,10 +209,11 @@ class ConsolePanel(tk.Frame):
         icon = icons.get(log_type, "•")
         
         self.text.configure(state="normal")
-        self.text.insert("end", f"[{timestamp}]", "time")
-        self.text.insert("end", f" {icon} {message}\n", log_type)
+        self.text.insert("end", f"[{timestamp}] ", "time")
+        self.text.insert("end", f"{icon} {message}\n", log_type)
         self.text.see("end")
         self.text.configure(state="disabled")
+        print(f"[{timestamp}] {icon} {message}")
 
 
 # ══════════════════════════════════════════
@@ -384,10 +392,12 @@ class PageDashboard(tk.Frame):
         self.plante_active = None
         self._vals = {}
         self.running = True
+        self.eau_level = 50
+        
         self.capteurs_data = {
-            "temperature": 0,
-            "humidite_air": 0,
-            "humidite_sol": 0,
+            "temperature": 25,
+            "humidite_air": 65,
+            "humidite_sol": 50,
             "pluie": False
         }
         
@@ -443,13 +453,14 @@ class PageDashboard(tk.Frame):
         self.inner = tk.Frame(canvas, bg=C["fond"])
 
         self.inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=self.inner, anchor="nw")
+        canvas.create_window((0, 0), window=self.inner, anchor="nw", width=left_frame.winfo_width() - 20)
         canvas.configure(yscrollcommand=sb.set)
         
         canvas.grid(row=0, column=0, sticky="nsew")
         sb.grid(row=0, column=1, sticky="ns")
 
         # SECTIONS
+        self._section_eau()
         self._section_capteurs()
         self._section_actionneurs()
         self._section_plantes()
@@ -472,6 +483,97 @@ class PageDashboard(tk.Frame):
 
         self.console = ConsolePanel(console_frame)
         self.console.grid(row=0, column=0, sticky="nsew")
+
+    def _section_eau(self):
+        """NIVEAU EAU - GRANDE SECTION"""
+        outer = self._card(self.inner, titre="💧 NIVEAU D'EAU")
+
+        # GRAND RESERVOIR
+        reservoir = tk.Frame(outer, bg=C["carte"])
+        reservoir.pack(fill="x", pady=(12, 16))
+
+        # Barres EAU - Vue gauche/droite
+        h_inner = tk.Frame(reservoir, bg=C["carte"])
+        h_inner.pack(fill="both", expand=True, padx=0)
+        h_inner.columnconfigure((0, 2), weight=1)
+        h_inner.columnconfigure(1, weight=0)
+
+        # Barre gauche
+        barre_left = tk.Frame(h_inner, bg=C["carte3"], width=60, height=150)
+        barre_left.grid(row=0, column=0, padx=12, sticky="nsew")
+        barre_left.grid_propagate(False)
+
+        eau_fill_left = tk.Frame(barre_left, bg=C["bleu"])
+        eau_fill_left.pack(side="bottom", fill="both")
+        self.eau_fill_left = eau_fill_left
+
+        # Label centre
+        label_eau = tk.Frame(h_inner, bg=C["carte"])
+        label_eau.grid(row=0, column=1, padx=8)
+
+        self.eau_pct = tk.Label(
+            label_eau,
+            text="50%",
+            font=("Segoe UI", 28, "bold"),
+            bg=C["carte"],
+            fg=C["cyan"]
+        )
+        self.eau_pct.pack()
+
+        tk.Label(
+            label_eau,
+            text="D'EAU",
+            font=("Segoe UI", 9),
+            bg=C["carte"],
+            fg=C["gris"]
+        ).pack()
+
+        # Barre droite
+        barre_right = tk.Frame(h_inner, bg=C["carte3"], width=60, height=150)
+        barre_right.grid(row=0, column=2, padx=12, sticky="nsew")
+        barre_right.grid_propagate(False)
+
+        eau_fill_right = tk.Frame(barre_right, bg=C["bleu"])
+        eau_fill_right.pack(side="bottom", fill="both")
+        self.eau_fill_right = eau_fill_right
+
+        # BOUTONS
+        btn_frame = tk.Frame(outer, bg=C["carte"])
+        btn_frame.pack(fill="x", pady=(8, 0))
+
+        btn_remplir = tk.Button(
+            btn_frame,
+            text="🚰 REMPLIR",
+            command=self._remplir_eau,
+            relief="flat"
+        )
+        btn_style(btn_remplir, bg=C["bleu"])
+        btn_remplir.pack(side="left", fill="x", expand=True, padx=(0, 4))
+
+        btn_vider = tk.Button(
+            btn_frame,
+            text="🗑️  VIDER",
+            command=self._vider_eau,
+            relief="flat"
+        )
+        btn_style(btn_vider, bg=C["rouge"], fg=C["texte"])
+        btn_vider.pack(side="left", fill="x", expand=True, padx=(4, 0))
+
+    def _remplir_eau(self):
+        self.eau_level = min(100, self.eau_level + 20)
+        self.console.log_event(f"Eau remplie → {self.eau_level}%", "success")
+        self._update_eau()
+
+    def _vider_eau(self):
+        self.eau_level = max(0, self.eau_level - 20)
+        self.console.log_event(f"Eau vidée → {self.eau_level}%", "warning")
+        self._update_eau()
+
+    def _update_eau(self):
+        ratio = self.eau_level / 100
+        self.eau_pct.configure(text=f"{int(self.eau_level)}%")
+        self.eau_fill_left.place(relheight=ratio)
+        self.eau_fill_right.place(relheight=ratio)
 
     def _section_capteurs(self):
         """CAPTEURS EN TEMPS REEL"""
@@ -505,7 +607,7 @@ class PageDashboard(tk.Frame):
             lbl = tk.Label(
                 c,
                 text=val,
-                font=("Courier New", 18, "bold"),
+                font=("Courier New", 16, "bold"),
                 bg=C["carte2"],
                 fg=C["cyan"]
             )
@@ -635,7 +737,7 @@ class PageDashboard(tk.Frame):
             self.after(0, self._afficher_plantes)
             self.console.log_event(f"{len(self.plantes)} plante(s) chargee(s)", "success")
         except Exception as e:
-            self.console.log_event(f"Erreur: {e}", "error")
+            self.console.log_event(f"Erreur chargement: {e}", "error")
 
     def _afficher_plantes(self):
         """Affiche liste plantes"""
@@ -841,16 +943,19 @@ class PageDashboard(tk.Frame):
 
     def _toggle_pompe(self):
         """ACTIVE LA POMPE GPIO + Firebase"""
+        print("💧 CLICK POMPE")
         etat = gpio.toggle_pompe()
         
         if etat:
             self.lbl_pompe.configure(text="● MARCHE", fg=C["vert"])
-            self.btn_pompe.configure(text="⏹️  ARRETER", bg=C["rouge"])
-            self.console.log_event("Pompe ACTIVEE (GPIO17)", "success")
+            self.btn_pompe.configure(text="⏹️  ARRETER")
+            btn_style(self.btn_pompe, bg=C["rouge"], size=10)
+            self.console.log_event("💧 Pompe ACTIVEE (GPIO17)", "success")
         else:
             self.lbl_pompe.configure(text="● ARRÊT", fg=C["rouge"])
-            self.btn_pompe.configure(text="▶️  DEMARRER", bg=C["bleu"])
-            self.console.log_event("Pompe desactivee", "warning")
+            self.btn_pompe.configure(text="▶️  DEMARRER")
+            btn_style(self.btn_pompe, bg=C["bleu"], size=10)
+            self.console.log_event("💧 Pompe desactivee", "warning")
 
         # Sauvegarde Firebase
         try:
@@ -860,21 +965,24 @@ class PageDashboard(tk.Frame):
                 "plante": self.plante_active["nom"] if self.plante_active else "N/A",
                 "timestamp": datetime.now().isoformat()
             })
-        except:
-            pass
+        except Exception as e:
+            print(f"Firebase save error: {e}")
 
     def _toggle_ventilo(self):
         """ACTIVE LE VENTILO GPIO + Firebase"""
+        print("💨 CLICK VENTILO")
         etat = gpio.toggle_ventilo()
         
         if etat:
             self.lbl_ventilo.configure(text="● MARCHE", fg=C["vert"])
-            self.btn_ventilo.configure(text="⏹️  ARRETER", bg=C["rouge"])
-            self.console.log_event("Ventilo ACTIVE (GPIO27)", "success")
+            self.btn_ventilo.configure(text="⏹️  ARRETER")
+            btn_style(self.btn_ventilo, bg=C["rouge"], size=10)
+            self.console.log_event("💨 Ventilo ACTIVE (GPIO27)", "success")
         else:
             self.lbl_ventilo.configure(text="● ARRÊT", fg=C["rouge"])
-            self.btn_ventilo.configure(text="▶️  DEMARRER", bg=C["orange"])
-            self.console.log_event("Ventilo desactivee", "warning")
+            self.btn_ventilo.configure(text="▶️  DEMARRER")
+            btn_style(self.btn_ventilo, bg=C["orange"], size=10)
+            self.console.log_event("💨 Ventilo desactivee", "warning")
 
         try:
             db.child("actions").child(self.uid).push({
@@ -882,13 +990,12 @@ class PageDashboard(tk.Frame):
                 "etat": etat,
                 "timestamp": datetime.now().isoformat()
             })
-        except:
-            pass
+        except Exception as e:
+            print(f"Firebase save error: {e}")
 
     def _update_loop(self):
         """Boucle mise à jour capteurs"""
         while self.running:
-            # SIMULATION CAPTEURS (remplace par lecture GPIO)
             try:
                 self.capteurs_data["temperature"] = 24 + (5 * (time.time() % 10) / 10)
                 self.capteurs_data["humidite_air"] = 65
@@ -958,9 +1065,9 @@ class PageDashboard(tk.Frame):
 class App:
     def __init__(self):
         self.fen = tk.Tk()
-        self.fen.title("🌿 Serre Connectee v2.3")
+        self.fen.title("🌿 Serre Connectee v2.4")
         self.fen.configure(bg=C["fond"])
-        self.fen.geometry("1500x900")
+        self.fen.geometry("1600x1000")
         self.fen.minsize(1200, 700)
         self.page = None
         self._connexion()
