@@ -1,12 +1,11 @@
-# -*- coding: utf-8 -*-
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
 import threading
 import time
-from datetime import datetime
+import pymysql
+pymysql.install_as_MySQLdb()
 import pyrebase
 
-# ===== FIREBASE CONFIG =====
 firebase_config = {
     "apiKey": "AIzaSyA8zkZrgGnxJzDTxCr3-gZ96DuGAn5B-OE",
     "authDomain": "serre-connecte-60616.firebaseapp.com",
@@ -16,828 +15,598 @@ firebase_config = {
     "appId": "1:217991792040:web:ae6fd4a5e0953418aec99d",
     "databaseURL": "https://serre-connecte-60616-default-rtdb.europe-west1.firebasedatabase.app"
 }
-
 firebase = pyrebase.initialize_app(firebase_config)
-auth = firebase.auth()
-db = firebase.database()
+auth     = firebase.auth()
+db       = firebase.database()
 
-# ===== PALETTE COULEURS =====
+def get_db():
+    return pymysql.connect(host="localhost", user="ravza",
+                           password="ravza", database="serre",
+                           charset="utf8mb4")
+
+def init_db():
+    try:
+        conn = get_db(); cur = conn.cursor()
+        cur.execute("""CREATE TABLE IF NOT EXISTS capteurs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            uid VARCHAR(255), temperature FLOAT,
+            humidite_air FLOAT, humidite_sol FLOAT,
+            pluie BOOLEAN,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS plantes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            uid VARCHAR(255), nom VARCHAR(100),
+            temp_max FLOAT, humidite_min FLOAT, eau_min FLOAT)""")
+        conn.commit(); cur.close(); conn.close()
+    except Exception as e:
+        print(f"[DB] Erreur init: {e}")
+
 C = {
-    "fond": "#0a0f1e",
-    "fond2": "#0d1529",
-    "carte": "#111d35",
-    "carte2": "#162040",
-    "carte3": "#1a2650",
-    "texte": "#e8f4f8",
-    "gris": "#4a6fa5",
-    "gris2": "#2a3f6f",
-    "vert": "#00ff88",
-    "vert2": "#00cc6a",
-    "rouge": "#ff4757",
-    "orange": "#ffa502",
-    "bleu": "#1e90ff",
-    "accent": "#00d4aa",
-    "accent2": "#009977",
-    "btn_texte": "#0a0f1e",
+    "fond":      "#0a0f1e",
+    "fond2":     "#0d1529",
+    "carte":     "#111d35",
+    "carte2":    "#162040",
+    "carte3":    "#1a2650",
+    "texte":     "#e8f4f8",
+    "gris":      "#4a6fa5",
+    "gris2":     "#1e2d50",
+    "vert":      "#00ff88",
+    "vert2":     "#00cc6a",
+    "rouge":     "#ff4757",
+    "orange":    "#ffa502",
+    "bleu":      "#1e90ff",
+    "accent":    "#00d4aa",
+    "accent2":   "#009977",
+    "titre":     "#00d4aa",
+    "console":   "#050d1a",
+    "log_info":  "#00d4aa",
+    "log_warn":  "#ffa502",
+    "log_err":   "#ff4757",
+    "log_ok":    "#00ff88",
 }
 
-# ===== FONCTIONS UTILITAIRES =====
-def entry_style(e, width=None):
-    kw = dict(
-        bg=C["carte2"],
-        fg=C["texte"],
-        insertbackground=C["accent"],
-        relief="flat",
-        bd=0,
-        font=("Segoe UI", 11),
-        highlightthickness=1,
-        highlightbackground=C["gris2"],
-        highlightcolor=C["accent"]
-    )
-    if width:
-        kw["width"] = width
-    e.configure(**kw)
+def es(e):
+    e.configure(bg=C["carte2"], fg=C["texte"], insertbackground=C["accent"],
+                relief="flat", bd=0, font=("Courier", 11),
+                highlightthickness=1, highlightbackground=C["gris2"],
+                highlightcolor=C["accent"])
 
-def btn_style(b, bg=None, fg=None, size=11):
-    b.configure(
-        bg=bg or C["accent"],
-        fg=fg or C["btn_texte"],
-        relief="flat",
-        bd=0,
-        font=("Segoe UI", size, "bold"),
-        cursor="hand2",
-        activebackground=C["accent2"],
-        activeforeground=C["btn_texte"]
-    )
+def bs(b, bg=None, fg=None, sz=10):
+    b.configure(bg=bg or C["accent"], fg=fg or C["fond"],
+                relief="flat", bd=0, font=("Courier", sz, "bold"),
+                cursor="hand2", activebackground=C["accent2"],
+                activeforeground=C["fond"])
 
-def label_titre(parent, text, size=11, color=None):
-    return tk.Label(
-        parent,
-        text=text,
-        font=("Segoe UI", size, "bold"),
-        bg=parent.cget("bg"),
-        fg=color or C["accent"]
-    )
 
-def label_sub(parent, text, size=9, color=None):
-    return tk.Label(
-        parent,
-        text=text,
-        font=("Segoe UI", size),
-        bg=parent.cget("bg"),
-        fg=color or C["gris"]
-    )
-
-def separateur(parent, color=None):
-    tk.Frame(parent, bg=color or C["gris2"], height=1).pack(fill="x", pady=8)
-
-# ══════════════════════════════════════════
-# PAGE CONNEXION
-# ══════════════════════════════════════════
 class PageConnexion(tk.Frame):
-    def __init__(self, parent, on_connexion):
+    def __init__(self, parent, on_conn):
         super().__init__(parent, bg=C["fond"])
-        self.on_connexion = on_connexion
-        self.mode_var = "connexion"
+        self.on_conn = on_conn
         self._build()
 
     def _build(self):
-        self.columnconfigure(0, weight=1)
-        self.rowconfigure(0, weight=1)
+        wrap = tk.Frame(self, bg=C["fond"])
+        wrap.place(relx=0.5, rely=0.5, anchor="center", width=440)
 
-        wrapper = tk.Frame(self, bg=C["fond"])
-        wrapper.place(relx=0.5, rely=0.5, anchor="center", width=420)
+        tk.Label(wrap, text="SERRE CONNECTEE",
+                 font=("Courier", 22, "bold"),
+                 bg=C["fond"], fg=C["titre"]).pack()
+        tk.Label(wrap, text="[ Systeme de gestion intelligent v1.0 ]",
+                 font=("Courier", 9), bg=C["fond"], fg=C["gris"]).pack(pady=4)
+        tk.Label(wrap, text="",
+                 font=("Courier", 30),
+                 bg=C["fond"], fg=C["accent"]).pack()
 
-        # LOGO
-        logo_frame = tk.Frame(wrapper, bg=C["fond"])
-        logo_frame.pack(pady=(0, 30))
+        card = tk.Frame(wrap, bg=C["carte"], pady=28, padx=32)
+        card.pack(fill="x", pady=(20,0))
+        tk.Frame(card, bg=C["accent"], height=2).pack(fill="x", pady=(0, 20))
 
-        tk.Label(
-            logo_frame,
-            text="SERRE",
-            font=("Segoe UI", 48, "bold"),
-            bg=C["fond"],
-            fg=C["accent"]
-        ).pack()
+        tabs = tk.Frame(card, bg=C["gris2"])
+        tabs.pack(fill="x", pady=(0, 22))
+        self.mode = "connexion"
+        self.btn_co = tk.Button(tabs, text=">> CONNEXION",
+                                 command=lambda: self._tab("connexion"),
+                                 relief="flat", pady=8, font=("Courier", 10, "bold"), cursor="hand2")
+        self.btn_in = tk.Button(tabs, text="INSCRIPTION",
+                                 command=lambda: self._tab("inscription"),
+                                 relief="flat", pady=8, font=("Courier", 10, "bold"), cursor="hand2")
+        self.btn_co.pack(side="left", fill="x", expand=True)
+        self.btn_in.pack(side="left", fill="x", expand=True)
+        self._tab("connexion")
 
-        tk.Label(
-            logo_frame,
-            text="CONNECTEE",
-            font=("Segoe UI", 24, "bold"),
-            bg=C["fond"],
-            fg=C["accent"]
-        ).pack()
+        for label, attr, show in [
+            ("> EMAIL :", "e_email", ""),
+            ("> MOT DE PASSE :", "e_mdp", "*"),
+        ]:
+            tk.Label(card, text=label, font=("Courier", 9),
+                     bg=C["carte"], fg=C["gris"]).pack(anchor="w")
+            e = tk.Entry(card, show=show)
+            es(e)
+            e.pack(fill="x", pady=(3, 14), ipady=9)
+            setattr(self, attr, e)
 
-        tk.Label(
-            logo_frame,
-            text="Systeme intelligent de gestion",
-            font=("Segoe UI", 10),
-            bg=C["fond"],
-            fg=C["gris"]
-        ).pack(pady=(4, 0))
+        self.btn_ok = tk.Button(card, text="[ SE CONNECTER ]",
+                                 command=self._action, pady=12)
+        bs(self.btn_ok, sz=12)
+        self.btn_ok.pack(fill="x")
 
-        # CARD PRINCIPALE
-        card = tk.Frame(wrapper, bg=C["carte"], pady=30, padx=35)
-        card.pack(fill="x")
-
-        # ONGLETS
-        tab_frame = tk.Frame(card, bg=C["carte2"], pady=4, padx=4)
-        tab_frame.pack(fill="x", pady=(0, 25))
-
-        self.btn_conn = tk.Button(
-            tab_frame,
-            text="CONNEXION",
-            command=lambda: self._mode("connexion"),
-            pady=7,
-            padx=20,
-            relief="flat",
-            font=("Segoe UI", 10, "bold"),
-            cursor="hand2"
-        )
-        self.btn_insc = tk.Button(
-            tab_frame,
-            text="INSCRIPTION",
-            command=lambda: self._mode("inscription"),
-            pady=7,
-            padx=20,
-            relief="flat",
-            font=("Segoe UI", 10, "bold"),
-            cursor="hand2"
-        )
-        self.btn_conn.pack(side="left", fill="x", expand=True)
-        self.btn_insc.pack(side="left", fill="x", expand=True)
-
-        # CHAMPS EMAIL
-        tk.Label(
-            card,
-            text="EMAIL",
-            font=("Segoe UI", 9, "bold"),
-            bg=C["carte"],
-            fg=C["gris"]
-        ).pack(anchor="w")
-        self.entry_email = tk.Entry(card)
-        entry_style(self.entry_email)
-        self.entry_email.pack(fill="x", pady=(4, 14), ipady=9)
-
-        # CHAMPS MOT DE PASSE
-        tk.Label(
-            card,
-            text="MOT DE PASSE",
-            font=("Segoe UI", 9, "bold"),
-            bg=C["carte"],
-            fg=C["gris"]
-        ).pack(anchor="w")
-        self.entry_mdp = tk.Entry(card, show="*")
-        entry_style(self.entry_mdp)
-        self.entry_mdp.pack(fill="x", pady=(4, 14), ipady=9)
-
-        # BOUTON ACTION (CREER AVANT _mode)
-        self.btn_action = tk.Button(
-            card,
-            text="SE CONNECTER",
-            command=self._action,
-            pady=12
-        )
-        btn_style(self.btn_action, size=12)
-        self.btn_action.pack(fill="x")
-
-        # MESSAGE ERREUR
-        self.lbl_msg = tk.Label(
-            card,
-            text="",
-            font=("Segoe UI", 9),
-            bg=C["carte"],
-            fg=C["rouge"]
-        )
+        self.lbl_msg = tk.Label(card, text="",
+                                 font=("Courier", 9),
+                                 bg=C["carte"], fg=C["rouge"])
         self.lbl_msg.pack(pady=(10, 0))
+        tk.Frame(card, bg=C["accent"], height=2).pack(fill="x", pady=(20, 0))
 
-        # FOOTER
-        tk.Label(
-            wrapper,
-            text="v2.0 | Serre IoT Project",
-            font=("Segoe UI", 8),
-            bg=C["fond"],
-            fg=C["gris2"]
-        ).pack(pady=(15, 0))
+        tk.Label(wrap, text="[ Raspberry Pi 4 | Debian Trixie | IoT ]",
+                 font=("Courier", 8), bg=C["fond"], fg=C["gris2"]).pack(pady=(12, 0))
 
-        # APPELER _mode APRES
-        self._mode("connexion")
-
-    def _mode(self, mode):
-        self.mode_var = mode
+    def _tab(self, mode):
+        self.mode = mode
         if mode == "connexion":
-            self.btn_conn.configure(bg=C["accent"], fg=C["btn_texte"])
-            self.btn_insc.configure(bg=C["carte2"], fg=C["gris"])
-            self.btn_action.configure(text="SE CONNECTER")
+            self.btn_co.configure(bg=C["accent"], fg=C["fond"])
+            self.btn_in.configure(bg=C["gris2"], fg=C["gris"])
+            if hasattr(self, "btn_ok"):
+                self.btn_ok.configure(text="[ SE CONNECTER ]")
         else:
-            self.btn_insc.configure(bg=C["accent"], fg=C["btn_texte"])
-            self.btn_conn.configure(bg=C["carte2"], fg=C["gris"])
-            self.btn_action.configure(text="CREER UN COMPTE")
+            self.btn_in.configure(bg=C["accent"], fg=C["fond"])
+            self.btn_co.configure(bg=C["gris2"], fg=C["gris"])
+            if hasattr(self, "btn_ok"):
+                self.btn_ok.configure(text="[ CREER UN COMPTE ]")
 
     def _action(self):
-        email = self.entry_email.get().strip()
-        mdp = self.entry_mdp.get().strip()
-        
+        email = self.e_email.get().strip()
+        mdp   = self.e_mdp.get().strip()
         if not email or not mdp:
-            self.lbl_msg.configure(text="Remplissez tous les champs")
+            self.lbl_msg.configure(text="[!] Remplissez tous les champs")
             return
-
-        txt = "SE CONNECTER" if self.mode_var == "connexion" else "CREER UN COMPTE"
-        self.btn_action.configure(text="Chargement...", state="disabled")
+        self.btn_ok.configure(text="...", state="disabled")
         self.lbl_msg.configure(text="")
 
         def tache():
             try:
-                if self.mode_var == "connexion":
+                if self.mode == "connexion":
                     user = auth.sign_in_with_email_and_password(email, mdp)
                 else:
                     user = auth.create_user_with_email_and_password(email, mdp)
                 uid = user["localId"]
-                self.after(0, lambda: self.on_connexion(uid, email))
+                self.after(0, lambda: self.on_conn(uid, email))
             except Exception as e:
                 s = str(e)
-                msg = "Email ou mot de passe incorrect"
-                if "EMAIL_EXISTS" in s:
-                    msg = "Email deja utilise"
-                elif "WEAK_PASSWORD" in s:
-                    msg = "Mot de passe trop court (6 min)"
-                elif "INVALID_EMAIL" in s:
-                    msg = "Email invalide"
-                self.after(0, lambda: self.lbl_msg.configure(text=msg))
-                self.after(0, lambda: self.btn_action.configure(text=txt, state="normal"))
-
+                msg = "[!] Email ou mot de passe incorrect"
+                if "EMAIL_EXISTS"    in s: msg = "[!] Email deja utilise"
+                elif "WEAK_PASSWORD" in s: msg = "[!] Mot de passe trop court (6 min)"
+                elif "INVALID_EMAIL" in s: msg = "[!] Email invalide"
+                t = "[ SE CONNECTER ]" if self.mode == "connexion" else "[ CREER UN COMPTE ]"
+                self.after(0, lambda: [self.lbl_msg.configure(text=msg),
+                                       self.btn_ok.configure(text=t, state="normal")])
         threading.Thread(target=tache, daemon=True).start()
 
 
-# ══════════════════════════════════════════
-# PAGE DASHBOARD
-# ══════════════════════════════════════════
 class PageDashboard(tk.Frame):
     def __init__(self, parent, uid, email, on_deconn):
         super().__init__(parent, bg=C["fond"])
-        self.uid = uid
-        self.email = email
-        self.on_deconn = on_deconn
-        self.plantes = []
-        self.plante_active = None
-        self.pompe_active = False
-        self.ventilo_actif = False
+        self.uid          = uid
+        self.email        = email
+        self.on_deconn    = on_deconn
+        self.plantes      = []
+        self.plante_active= None
+        self.pompe_on     = False
+        self.ventilo_on   = False
 
         self._charger_plantes()
         self._build()
         self._rafraichir()
 
     def _charger_plantes(self):
-        """Charge les plantes depuis Firebase"""
         try:
-            response = db.child("plantes").child(self.uid).get()
-            if response.val():
-                self.plantes = [
-                    {
-                        "nom": k,
-                        "temp_max": v.get("temp_max", 30),
-                        "humidite_min": v.get("humidite_min", 50),
-                        "eau_min": v.get("eau_min", 30)
-                    }
-                    for k, v in response.val().items()
-                ]
-        except:
-            self.plantes = []
-        
-        if self.plantes:
-            self.plante_active = self.plantes[0]
+            conn = get_db(); cur = conn.cursor()
+            cur.execute("SELECT nom,temp_max,humidite_min,eau_min FROM plantes WHERE uid=%s", (self.uid,))
+            self.plantes = [{"nom":r[0],"temp_max":r[1],"humidite_min":r[2],"eau_min":r[3]} for r in cur.fetchall()]
+            cur.close(); conn.close()
+        except: self.plantes = []
+        if self.plantes: self.plante_active = self.plantes[0]
 
     def _build(self):
-        # HEADER
-        hdr = tk.Frame(self, bg=C["carte"], padx=20, pady=14)
+        hdr = tk.Frame(self, bg=C["carte"], padx=16, pady=12)
         hdr.pack(fill="x")
-
-        left = tk.Frame(hdr, bg=C["carte"])
-        left.pack(side="left")
-        tk.Label(
-            left,
-            text="SERRE",
-            font=("Segoe UI", 18, "bold"),
-            bg=C["carte"],
-            fg=C["accent"]
-        ).pack(side="left")
-        tk.Label(
-            left,
-            text=" CONNECTEE",
-            font=("Segoe UI", 14, "bold"),
-            bg=C["carte"],
-            fg=C["titre"]
-        ).pack(side="left")
-
+        tk.Label(hdr, text="[SERRE] SYSTEME DE GESTION",
+                 font=("Courier", 12, "bold"),
+                 bg=C["carte"], fg=C["accent"]).pack(side="left")
         right = tk.Frame(hdr, bg=C["carte"])
         right.pack(side="right")
-
-        tk.Label(
-            right,
-            text=f"{self.email}",
-            font=("Segoe UI", 9),
-            bg=C["carte"],
-            fg=C["gris"]
-        ).pack(side="left", padx=15)
-
-        btn_dc = tk.Button(right, text="DECONNEXION", command=self.on_deconn, pady=6, padx=12)
-        btn_style(btn_dc, bg=C["rouge"], fg=C["texte"])
+        tk.Label(right, text=f"[{self.email}]",
+                 font=("Courier", 8), bg=C["carte"], fg=C["gris"]).pack(side="left", padx=10)
+        btn_dc = tk.Button(right, text="[DECONNEXION]",
+                            command=self.on_deconn, pady=5, padx=8)
+        bs(btn_dc, bg=C["rouge"], fg=C["texte"])
         btn_dc.pack(side="left")
+        tk.Frame(self, bg=C["accent"], height=2).pack(fill="x")
 
-        # BARRE STATUS
-        self.barre = tk.Frame(self, bg=C["accent"], height=2)
-        self.barre.pack(fill="x")
+        main = tk.Frame(self, bg=C["fond"])
+        main.pack(fill="both", expand=True)
 
-        # SCROLL AREA
-        wrap = tk.Frame(self, bg=C["fond"])
-        wrap.pack(fill="both", expand=True)
+        left_frame = tk.Frame(main, bg=C["fond"])
+        left_frame.pack(side="left", fill="both", expand=True, padx=(12,6), pady=12)
 
-        canvas = tk.Canvas(wrap, bg=C["fond"], highlightthickness=0)
-        sb = tk.Scrollbar(wrap, orient="vertical", command=canvas.yview)
-        self.inner = tk.Frame(canvas, bg=C["fond"])
-
+        canvas_l = tk.Canvas(left_frame, bg=C["fond"], highlightthickness=0)
+        sb_l = tk.Scrollbar(left_frame, orient="vertical", command=canvas_l.yview)
+        self.inner = tk.Frame(canvas_l, bg=C["fond"])
         self.inner.bind("<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=self.inner, anchor="nw")
-        canvas.configure(yscrollcommand=sb.set)
-        canvas.pack(side="left", fill="both", expand=True)
-        sb.pack(side="right", fill="y")
-
-        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(-1*(e.delta//120), "units"))
+            lambda e: canvas_l.configure(scrollregion=canvas_l.bbox("all")))
+        canvas_l.create_window((0,0), window=self.inner, anchor="nw")
+        canvas_l.configure(yscrollcommand=sb_l.set)
+        canvas_l.pack(side="left", fill="both", expand=True)
+        sb_l.pack(side="right", fill="y")
 
         self._section_capteurs()
         self._section_actionneurs()
         self._section_plantes()
+        self.lbl_statut = tk.Label(self.inner, text="",
+                                    font=("Courier", 8),
+                                    bg=C["fond"], fg=C["gris"])
+        self.lbl_statut.pack(pady=5)
 
-        self.lbl_statut = tk.Label(
-            self.inner,
-            text="",
-            font=("Segoe UI", 8),
-            bg=C["fond"],
-            fg=C["gris"]
-        )
-        self.lbl_statut.pack(pady=(5, 15))
+        right_frame = tk.Frame(main, bg=C["fond"], width=290)
+        right_frame.pack(side="right", fill="both", padx=(6,12), pady=12)
+        right_frame.pack_propagate(False)
+        self._build_console(right_frame)
+
+    def _build_console(self, parent):
+        tk.Label(parent, text=">> CONSOLE SYSTEME",
+                 font=("Courier", 10, "bold"),
+                 bg=C["fond"], fg=C["accent"]).pack(anchor="w")
+        tk.Frame(parent, bg=C["accent"], height=1).pack(fill="x", pady=(3,6))
+
+        cf = tk.Frame(parent, bg=C["console"], highlightthickness=1,
+                       highlightbackground=C["gris2"])
+        cf.pack(fill="both", expand=True)
+
+        self.console = tk.Text(cf, bg=C["console"], fg=C["log_info"],
+                                font=("Courier", 8), relief="flat", bd=0,
+                                state="disabled", wrap="word",
+                                insertbackground=C["accent"])
+        sb_c = tk.Scrollbar(cf, command=self.console.yview)
+        self.console.configure(yscrollcommand=sb_c.set)
+        sb_c.pack(side="right", fill="y")
+        self.console.pack(fill="both", expand=True, padx=4, pady=4)
+
+        self.console.tag_configure("INFO",  foreground=C["log_info"])
+        self.console.tag_configure("OK",    foreground=C["log_ok"])
+        self.console.tag_configure("WARN",  foreground=C["log_warn"])
+        self.console.tag_configure("ERROR", foreground=C["log_err"])
+        self.console.tag_configure("DATA",  foreground=C["texte"])
+        self.console.tag_configure("TIME",  foreground=C["gris"])
+
+        btn_clear = tk.Button(parent, text="[EFFACER]",
+                               command=self._clear_console, pady=5)
+        bs(btn_clear, bg=C["gris2"], fg=C["gris"])
+        btn_clear.pack(fill="x", pady=(6,0))
+
+        self._log("INFO", "Systeme demarre")
+        self._log("INFO", f"User: {self.email}")
+        self._log("INFO", "Connexion Firebase...")
+
+    def _log(self, level, msg):
+        self.after(0, self._log_ui, level, msg)
+
+    def _log_ui(self, level, msg):
+        self.console.configure(state="normal")
+        ts = time.strftime("%H:%M:%S")
+        self.console.insert("end", f"[{ts}] ", "TIME")
+        self.console.insert("end", f"[{level}] ", level)
+        self.console.insert("end", f"{msg}\n", "DATA")
+        self.console.configure(state="disabled")
+        self.console.see("end")
+
+    def _clear_console(self):
+        self.console.configure(state="normal")
+        self.console.delete("1.0", "end")
+        self.console.configure(state="disabled")
+
+    def _card(self, parent, titre):
+        border = tk.Frame(parent, bg=C["accent"], pady=1, padx=1)
+        border.pack(fill="x", pady=6)
+        card = tk.Frame(border, bg=C["carte"], padx=16, pady=14)
+        card.pack(fill="x")
+        tk.Label(card, text=titre, font=("Courier", 10, "bold"),
+                 bg=C["carte"], fg=C["accent"]).pack(anchor="w")
+        tk.Frame(card, bg=C["gris2"], height=1).pack(fill="x", pady=(4,10))
+        return card
 
     def _section_capteurs(self):
-        """Section donnees capteurs"""
-        outer = self._card(self.inner, titre="DONNEES EN TEMPS REEL")
-
-        grille = tk.Frame(outer, bg=C["carte"])
-        grille.pack(fill="x", pady=(5, 0))
-
-        capteurs = [
-            ("Temp", "Temperature", "--C", "temp"),
-            ("Hum Air", "Humidite air", "--%", "hum"),
-            ("Hum Sol", "Humidite sol", "--%", "sol"),
-            ("Pluie", "Detection pluie", "Non", "pluie"),
-        ]
+        card = self._card(self.inner, ">> CAPTEURS EN TEMPS REEL")
+        grille = tk.Frame(card, bg=C["carte"])
+        grille.pack(fill="x")
         self._vals = {}
-        
-        for i, (ico, nom, val, key) in enumerate(capteurs):
-            c = tk.Frame(grille, bg=C["carte2"], padx=14, pady=12)
-            c.grid(row=i//2, column=i%2, padx=6, pady=6, sticky="ew")
+        donnees = [
+            ("TEMPERATURE", "temp",  "--",  "C",  "T"),
+            ("HUMID. AIR",  "hum",   "--",  "%",  "H"),
+            ("HUMID. SOL",  "sol",   "--",  "%",  "S"),
+            ("PLUIE",       "pluie", "--",  "",   "P"),
+        ]
+        for i, (nom, key, val, unit, ico) in enumerate(donnees):
+            c = tk.Frame(grille, bg=C["carte2"], padx=12, pady=10)
+            c.grid(row=i//2, column=i%2, padx=4, pady=4, sticky="ew")
             grille.columnconfigure(i%2, weight=1)
-
-            top = tk.Frame(c, bg=C["carte2"])
-            top.pack(fill="x")
-            tk.Label(
-                top,
-                text=ico,
-                font=("Segoe UI", 12, "bold"),
-                bg=C["carte2"],
-                fg=C["accent"]
-            ).pack(side="left")
-            tk.Label(
-                top,
-                text=f"  {nom}",
-                font=("Segoe UI", 9),
-                bg=C["carte2"],
-                fg=C["gris"]
-            ).pack(side="left")
-
-            lbl = tk.Label(
-                c,
-                text=val,
-                font=("Segoe UI", 22, "bold"),
-                bg=C["carte2"],
-                fg=C["texte"]
-            )
-            lbl.pack(anchor="w", pady=(4, 0))
-
+            tk.Label(c, text=f"[{ico}] {nom}",
+                     font=("Courier", 8), bg=C["carte2"], fg=C["gris"]).pack(anchor="w")
+            lbl = tk.Label(c, text=f"{val}{unit}",
+                           font=("Courier", 20, "bold"),
+                           bg=C["carte2"], fg=C["texte"])
+            lbl.pack(anchor="w", pady=(4,2))
             bar_bg = tk.Frame(c, bg=C["gris2"], height=3)
-            bar_bg.pack(fill="x", pady=(6, 0))
-            bar_fill = tk.Frame(bar_bg, bg=C["accent"], height=3, width=0)
-            bar_fill.place(x=0, y=0, relheight=1, relwidth=0.5)
-
-            self._vals[key] = (lbl, bar_fill)
+            bar_bg.pack(fill="x")
+            bar = tk.Frame(bar_bg, bg=C["accent"], height=3)
+            bar.place(x=0, y=0, relheight=1, relwidth=0.5)
+            self._vals[key] = (lbl, bar)
 
     def _section_actionneurs(self):
-        """Section controle actionneurs"""
-        outer = self._card(self.inner, titre="CONTROLE DES ACTIONNEURS")
-
-        grille = tk.Frame(outer, bg=C["carte"])
-        grille.pack(fill="x", pady=(5, 0))
-
-        for col, (nom, toggle_fn, state_attr, lbl_attr, btn_attr) in enumerate([
-            ("POMPE", self._toggle_pompe, "pompe_active", "lbl_pompe", "btn_pompe"),
-            ("VENTILATEUR", self._toggle_ventilo, "ventilo_actif", "lbl_ventilo", "btn_ventilo"),
+        card = self._card(self.inner, ">> ACTIONNEURS")
+        grille = tk.Frame(card, bg=C["carte"])
+        grille.pack(fill="x")
+        for col, (nom, tog, lbl_a, btn_a) in enumerate([
+            ("POMPE",       self._tog_pompe,   "lbl_pompe",   "btn_pompe"),
+            ("VENTILATEUR", self._tog_ventilo, "lbl_ventilo", "btn_ventilo"),
         ]):
-            c = tk.Frame(grille, bg=C["carte2"], padx=16, pady=16)
-            c.grid(row=0, column=col, padx=6, pady=6, sticky="ew")
+            c = tk.Frame(grille, bg=C["carte2"], padx=14, pady=14)
+            c.grid(row=0, column=col, padx=4, pady=4, sticky="ew")
             grille.columnconfigure(col, weight=1)
-
-            tk.Label(
-                c,
-                text=nom,
-                font=("Segoe UI", 11, "bold"),
-                bg=C["carte2"],
-                fg=C["gris"]
-            ).pack()
-
-            lbl = tk.Label(
-                c,
-                text="OFF",
-                font=("Segoe UI", 14, "bold"),
-                bg=C["carte2"],
-                fg=C["rouge"]
-            )
+            tk.Label(c, text=nom, font=("Courier", 10, "bold"),
+                     bg=C["carte2"], fg=C["gris"]).pack()
+            lbl = tk.Label(c, text="[OFF]", font=("Courier", 13, "bold"),
+                           bg=C["carte2"], fg=C["rouge"])
             lbl.pack(pady=8)
-
-            btn = tk.Button(c, text="ACTIVER", command=toggle_fn, pady=8)
-            btn_style(btn)
+            btn = tk.Button(c, text="[ACTIVER]", command=tog, pady=7)
+            bs(btn)
             btn.pack(fill="x")
-
-            setattr(self, lbl_attr, lbl)
-            setattr(self, btn_attr, btn)
+            setattr(self, lbl_a, lbl)
+            setattr(self, btn_a, btn)
 
     def _section_plantes(self):
-        """Section gestion plantes"""
-        outer = self._card(self.inner, titre=f"MES PLANTES ({len(self.plantes)}/3)")
-
+        self.card_plantes = self._card(self.inner, f">> MES PLANTES ({len(self.plantes)}/3)")
         if len(self.plantes) < 3:
-            btn_add = tk.Button(
-                outer,
-                text="+ AJOUTER UNE PLANTE",
-                command=self._popup_plante,
-                pady=7
-            )
-            btn_style(btn_add)
-            btn_add.pack(fill="x", pady=(0, 12))
-        else:
-            tk.Label(
-                outer,
-                text="Maximum 3 plantes atteint",
-                font=("Segoe UI", 9),
-                bg=C["carte"],
-                fg=C["orange"]
-            ).pack(anchor="w", pady=(0, 10))
-
-        self.frame_liste = tk.Frame(outer, bg=C["carte"])
-        self.frame_liste.pack(fill="x")
+            btn_add = tk.Button(self.card_plantes, text="[+ AJOUTER UNE PLANTE]",
+                                 command=self._popup_plante, pady=7)
+            bs(btn_add)
+            btn_add.pack(fill="x", pady=(0,10))
+        self.frame_plantes = tk.Frame(self.card_plantes, bg=C["carte"])
+        self.frame_plantes.pack(fill="x")
         self._afficher_plantes()
 
     def _afficher_plantes(self):
-        """Affiche la liste des plantes"""
-        for w in self.frame_liste.winfo_children():
+        for w in self.frame_plantes.winfo_children():
             w.destroy()
-
         if not self.plantes:
-            tk.Label(
-                self.frame_liste,
-                text="Aucune plante - cliquez sur AJOUTER",
-                font=("Segoe UI", 10, "italic"),
-                bg=C["carte"],
-                fg=C["gris"]
-            ).pack(pady=15)
+            tk.Label(self.frame_plantes,
+                     text="> Aucune plante configuree",
+                     font=("Courier", 9, "italic"),
+                     bg=C["carte"], fg=C["gris"]).pack(pady=12)
             return
-
-        for plante in self.plantes:
-            actif = self.plante_active and self.plante_active["nom"] == plante["nom"]
-            border_color = C["accent"] if actif else C["gris2"]
-
-            c = tk.Frame(self.frame_liste, bg=border_color, pady=1, padx=1)
-            c.pack(fill="x", pady=5)
-            inner = tk.Frame(c, bg=C["carte3"] if actif else C["carte2"], padx=14, pady=12)
+        for p in self.plantes:
+            actif = self.plante_active and self.plante_active["nom"] == p["nom"]
+            bc = C["accent"] if actif else C["gris2"]
+            border = tk.Frame(self.frame_plantes, bg=bc, pady=1, padx=1)
+            border.pack(fill="x", pady=4)
+            inner = tk.Frame(border, bg=C["carte3"] if actif else C["carte2"],
+                              padx=12, pady=10)
             inner.pack(fill="x")
-
-            top = tk.Frame(inner, bg=inner.cget("bg"))
+            ibg = inner.cget("bg")
+            top = tk.Frame(inner, bg=ibg)
             top.pack(fill="x")
-
-            tk.Label(
-                top,
-                text=plante['nom'],
-                font=("Segoe UI", 12, "bold"),
-                bg=inner.cget("bg"),
-                fg=C["accent"] if actif else C["texte"]
-            ).pack(side="left")
-
+            tk.Label(top, text=f">> {p['nom']}",
+                     font=("Courier", 11, "bold"),
+                     bg=ibg, fg=C["accent"] if actif else C["texte"]).pack(side="left")
             if actif:
-                tk.Label(
-                    top,
-                    text="ACTIVE",
-                    font=("Segoe UI", 8, "bold"),
-                    bg=inner.cget("bg"),
-                    fg=C["vert"]
-                ).pack(side="left", padx=(8, 0))
-
-            info_frame = tk.Frame(inner, bg=inner.cget("bg"))
-            info_frame.pack(fill="x", pady=(8, 0))
-
-            for label, val, unit in [
-                ("Temp max", plante["temp_max"], "C"),
-                ("Hum min", plante["humidite_min"], "%"),
-                ("Eau min", plante["eau_min"], "%"),
-            ]:
-                chip = tk.Frame(info_frame, bg=C["gris2"], padx=8, pady=4)
-                chip.pack(side="left", padx=(0, 6))
-                tk.Label(
-                    chip,
-                    text=f"{label}: {val}{unit}",
-                    font=("Segoe UI", 8),
-                    bg=C["gris2"],
-                    fg=C["texte"]
-                ).pack()
-
-            btn_frame = tk.Frame(inner, bg=inner.cget("bg"))
-            btn_frame.pack(fill="x", pady=(10, 0))
-
+                tk.Label(top, text=" [ACTIVE]",
+                         font=("Courier", 8), bg=ibg, fg=C["vert"]).pack(side="left")
+            info = tk.Frame(inner, bg=ibg)
+            info.pack(fill="x", pady=(6,0))
+            for txt in [f"T.max:{p['temp_max']}C", f"Hum:{p['humidite_min']}%", f"Eau:{p['eau_min']}%"]:
+                chip = tk.Frame(info, bg=C["gris2"], padx=7, pady=3)
+                chip.pack(side="left", padx=(0,5))
+                tk.Label(chip, text=txt, font=("Courier", 8),
+                         bg=C["gris2"], fg=C["texte"]).pack()
+            btns = tk.Frame(inner, bg=ibg)
+            btns.pack(fill="x", pady=(8,0))
             if not actif:
-                b_sel = tk.Button(
-                    btn_frame,
-                    text="SELECTIONNER",
-                    command=lambda p=plante: self._selectionner(p),
-                    pady=5,
-                    padx=10
-                )
-                btn_style(b_sel)
-                b_sel.pack(side="left")
-
-            b_sup = tk.Button(
-                btn_frame,
-                text="SUPPRIMER",
-                command=lambda p=plante: self._supprimer(p),
-                pady=5,
-                padx=10
-            )
-            btn_style(b_sup, bg=C["rouge"], fg=C["texte"])
-            b_sup.pack(side="right")
+                b = tk.Button(btns, text="[SELECT]",
+                               command=lambda pl=p: self._select(pl),
+                               pady=4, padx=8)
+                bs(b, sz=9)
+                b.pack(side="left")
+            b2 = tk.Button(btns, text="[SUPPR]",
+                            command=lambda pl=p: self._suppr(pl),
+                            pady=4, padx=8)
+            bs(b2, bg=C["rouge"], fg=C["texte"], sz=9)
+            b2.pack(side="right")
 
     def _popup_plante(self):
-        """Popup pour ajouter une plante"""
         if len(self.plantes) >= 3:
             messagebox.showwarning("Limite", "Maximum 3 plantes !")
             return
-
         pop = tk.Toplevel(self)
         pop.title("Nouvelle plante")
         pop.configure(bg=C["fond"])
-        pop.geometry("420x480")
+        pop.geometry("400x460")
         pop.resizable(False, False)
         pop.grab_set()
-
-        tk.Label(
-            pop,
-            text="NOUVELLE PLANTE",
-            font=("Segoe UI", 15, "bold"),
-            bg=C["fond"],
-            fg=C["accent"]
-        ).pack(pady=(25, 5))
-
-        tk.Label(
-            pop,
-            text="Configurez les seuils",
-            font=("Segoe UI", 9),
-            bg=C["fond"],
-            fg=C["gris"]
-        ).pack()
-
-        card = tk.Frame(pop, bg=C["carte"], padx=30, pady=25)
-        card.pack(fill="x", padx=25, pady=20)
-
+        tk.Label(pop, text=">> NOUVELLE PLANTE",
+                 font=("Courier", 14, "bold"),
+                 bg=C["fond"], fg=C["accent"]).pack(pady=(20,5))
+        tk.Frame(pop, bg=C["accent"], height=2).pack(fill="x", padx=20)
+        card = tk.Frame(pop, bg=C["carte"], padx=28, pady=22)
+        card.pack(fill="x", padx=20, pady=16)
         champs = [
-            ("NOM DE LA PLANTE", "nom", ""),
-            ("TEMPERATURE MAX (C)", "temp_max", "30"),
-            ("HUMIDITE MINI (%)", "humidite_min", "50"),
-            ("EAU MINI (%)", "eau_min", "30"),
+            ("> NOM :",         "nom",          ""),
+            ("> TEMP MAX (C):", "temp_max",     "30"),
+            ("> HUM MIN (%) :", "humidite_min", "50"),
+            ("> EAU MIN (%) :", "eau_min",      "30"),
         ]
         entries = {}
-        
         for label, key, default in champs:
-            tk.Label(
-                card,
-                text=label,
-                font=("Segoe UI", 9, "bold"),
-                bg=C["carte"],
-                fg=C["gris"]
-            ).pack(anchor="w")
+            tk.Label(card, text=label, font=("Courier", 9),
+                     bg=C["carte"], fg=C["gris"]).pack(anchor="w")
             e = tk.Entry(card)
-            entry_style(e)
+            es(e)
             e.insert(0, default)
-            e.pack(fill="x", pady=(4, 12), ipady=8)
+            e.pack(fill="x", pady=(3,12), ipady=8)
             entries[key] = e
-
-        lbl_err = tk.Label(
-            card,
-            text="",
-            font=("Segoe UI", 9),
-            bg=C["carte"],
-            fg=C["rouge"]
-        )
+        lbl_err = tk.Label(card, text="", font=("Courier", 9),
+                            bg=C["carte"], fg=C["rouge"])
         lbl_err.pack()
-
-        def sauvegarder():
+        def save():
             nom = entries["nom"].get().strip()
             if not nom:
-                lbl_err.configure(text="Le nom est obligatoire")
-                return
+                lbl_err.configure(text="[!] Nom obligatoire"); return
             if any(p["nom"].lower() == nom.lower() for p in self.plantes):
-                lbl_err.configure(text="Cette plante existe deja")
-                return
+                lbl_err.configure(text="[!] Plante deja existante"); return
             try:
                 tm = float(entries["temp_max"].get())
                 hm = float(entries["humidite_min"].get())
                 em = float(entries["eau_min"].get())
             except:
-                lbl_err.configure(text="Valeurs numeriques invalides")
-                return
-
+                lbl_err.configure(text="[!] Valeurs invalides"); return
             try:
-                db.child("plantes").child(self.uid).child(nom).set({
-                    "temp_max": tm,
-                    "humidite_min": hm,
-                    "eau_min": em
-                })
+                conn = get_db(); cur = conn.cursor()
+                cur.execute(
+                    "INSERT INTO plantes (uid,nom,temp_max,humidite_min,eau_min) VALUES (%s,%s,%s,%s,%s)",
+                    (self.uid, nom, tm, hm, em))
+                conn.commit(); cur.close(); conn.close()
             except Exception as e:
-                lbl_err.configure(text=f"Erreur Firebase: {e}")
-                return
-
-            self.plantes.append({
-                "nom": nom,
-                "temp_max": tm,
-                "humidite_min": hm,
-                "eau_min": em
-            })
-            if not self.plante_active:
-                self.plante_active = self.plantes[0]
-            self._rebuild_plantes()
+                lbl_err.configure(text=f"[!] DB: {e}"); return
+            self.plantes.append({"nom":nom,"temp_max":tm,"humidite_min":hm,"eau_min":em})
+            if not self.plante_active: self.plante_active = self.plantes[0]
+            self._rebuild()
+            self._log("OK", f"Plante ajoutee: {nom}")
             pop.destroy()
+        btn = tk.Button(card, text="[AJOUTER]", command=save, pady=10)
+        bs(btn, sz=11)
+        btn.pack(fill="x", pady=(8,0))
 
-        btn = tk.Button(card, text="AJOUTER LA PLANTE", command=sauvegarder, pady=11)
-        btn_style(btn, size=11)
-        btn.pack(fill="x", pady=(8, 0))
-
-    def _rebuild_plantes(self):
-        """Reconstruit la section plantes"""
+    def _rebuild(self):
         for w in self.inner.winfo_children():
             w.destroy()
         self._section_capteurs()
         self._section_actionneurs()
         self._section_plantes()
-        self.lbl_statut = tk.Label(
-            self.inner,
-            text="",
-            font=("Segoe UI", 8),
-            bg=C["fond"],
-            fg=C["gris"]
-        )
-        self.lbl_statut.pack(pady=(5, 15))
+        self.lbl_statut = tk.Label(self.inner, text="",
+                                    font=("Courier", 8),
+                                    bg=C["fond"], fg=C["gris"])
+        self.lbl_statut.pack(pady=5)
 
-    def _selectionner(self, plante):
-        """Selectionne une plante active"""
-        self.plante_active = plante
+    def _select(self, p):
+        self.plante_active = p
         self._afficher_plantes()
+        self._log("INFO", f"Plante: {p['nom']}")
 
-    def _supprimer(self, plante):
-        """Supprime une plante"""
-        if not messagebox.askyesno("Supprimer", f"Supprimer {plante['nom']} ?"):
+    def _suppr(self, p):
+        if not messagebox.askyesno("Supprimer", f"Supprimer {p['nom']} ?"):
             return
-        
         try:
-            db.child("plantes").child(self.uid).child(plante["nom"]).remove()
+            conn = get_db(); cur = conn.cursor()
+            cur.execute("DELETE FROM plantes WHERE uid=%s AND nom=%s", (self.uid, p["nom"]))
+            conn.commit(); cur.close(); conn.close()
         except Exception as e:
-            print(f"Erreur: {e}")
-        
-        self.plantes = [p for p in self.plantes if p["nom"] != plante["nom"]]
-        if self.plante_active and self.plante_active["nom"] == plante["nom"]:
+            self._log("ERROR", f"Suppression: {e}")
+        self.plantes = [x for x in self.plantes if x["nom"] != p["nom"]]
+        if self.plante_active and self.plante_active["nom"] == p["nom"]:
             self.plante_active = self.plantes[0] if self.plantes else None
-        self._rebuild_plantes()
+        self._rebuild()
+        self._log("WARN", f"Plante supprimee: {p['nom']}")
 
-    def _toggle_pompe(self):
-        """Active/desactive la pompe"""
-        self.pompe_active = not self.pompe_active
-        if self.pompe_active:
-            self.lbl_pompe.configure(text="ON", fg=C["vert"])
-            self.btn_pompe.configure(text="DESACTIVER", bg=C["rouge"])
+    def _tog_pompe(self):
+        self.pompe_on = not self.pompe_on
+        if self.pompe_on:
+            self.lbl_pompe.configure(text="[ON]", fg=C["vert"])
+            self.btn_pompe.configure(text="[DESACTIVER]", bg=C["rouge"], fg=C["texte"])
+            self._log("OK", "Pompe activee")
         else:
-            self.lbl_pompe.configure(text="OFF", fg=C["rouge"])
-            self.btn_pompe.configure(text="ACTIVER", bg=C["accent"])
-        self._cmd("pompe", self.pompe_active)
+            self.lbl_pompe.configure(text="[OFF]", fg=C["rouge"])
+            self.btn_pompe.configure(text="[ACTIVER]", bg=C["accent"], fg=C["fond"])
+            self._log("WARN", "Pompe desactivee")
+        threading.Thread(target=lambda: db.child("commandes").child(self.uid).update({"pompe": self.pompe_on}), daemon=True).start()
 
-    def _toggle_ventilo(self):
-        """Active/desactive le ventilateur"""
-        self.ventilo_actif = not self.ventilo_actif
-        if self.ventilo_actif:
-            self.lbl_ventilo.configure(text="ON", fg=C["vert"])
-            self.btn_ventilo.configure(text="DESACTIVER", bg=C["rouge"])
+    def _tog_ventilo(self):
+        self.ventilo_on = not self.ventilo_on
+        if self.ventilo_on:
+            self.lbl_ventilo.configure(text="[ON]", fg=C["vert"])
+            self.btn_ventilo.configure(text="[DESACTIVER]", bg=C["rouge"], fg=C["texte"])
+            self._log("OK", "Ventilateur active")
         else:
-            self.lbl_ventilo.configure(text="OFF", fg=C["rouge"])
-            self.btn_ventilo.configure(text="ACTIVER", bg=C["accent"])
-        self._cmd("ventilateur", self.ventilo_actif)
-
-    def _cmd(self, appareil, etat):
-        """Envoie une commande"""
-        threading.Thread(
-            target=lambda: db.child("commandes").child(self.uid).update({appareil: etat}),
-            daemon=True
-        ).start()
+            self.lbl_ventilo.configure(text="[OFF]", fg=C["rouge"])
+            self.btn_ventilo.configure(text="[ACTIVER]", bg=C["accent"], fg=C["fond"])
+            self._log("WARN", "Ventilateur desactive")
+        threading.Thread(target=lambda: db.child("commandes").child(self.uid).update({"ventilateur": self.ventilo_on}), daemon=True).start()
 
     def _rafraichir(self):
-        """Rafraichit les donnees capteurs"""
         def tache():
             try:
-                response = db.child("capteurs").child(self.uid).get()
-                if response.val():
-                    d = response.val()
+                d = db.child("capteurs").child(self.uid).get().val()
+                if d:
                     self.after(0, self._update, d)
+                    self._save_db(d)
+                else:
+                    self._log("WARN", "Aucune donnee capteur Firebase")
             except Exception as e:
-                print(f"Firebase: {e}")
+                self._log("ERROR", f"Firebase: {e}")
             self.after(5000, self._rafraichir)
         threading.Thread(target=tache, daemon=True).start()
 
-    def _update(self, d):
-        """Met a jour l'affichage des capteurs"""
-        temp = d.get("temperature", "--")
-        hum = d.get("humidite_air", "--")
-        sol = d.get("humidite_sol", "--")
-        pluie = d.get("pluie", False)
+    def _save_db(self, d):
+        try:
+            conn = get_db(); cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO capteurs (uid,temperature,humidite_air,humidite_sol,pluie) VALUES (%s,%s,%s,%s,%s)",
+                (self.uid, d.get("temperature"), d.get("humidite_air"),
+                 d.get("humidite_sol"), d.get("pluie", False)))
+            conn.commit(); cur.close(); conn.close()
+        except Exception as e:
+            self._log("ERROR", f"MariaDB: {e}")
 
+    def _update(self, d):
+        temp  = d.get("temperature", "--")
+        hum   = d.get("humidite_air", "--")
+        sol   = d.get("humidite_sol", "--")
+        pluie = d.get("pluie", False)
         configs = {
-            "temp": (f"{temp}C", C["rouge"] if isinstance(temp, (int, float)) and temp > 30 else C["vert"], 0.7),
-            "hum": (f"{hum}%", C["orange"] if isinstance(hum, (int, float)) and hum < 40 else C["vert"], hum/100 if isinstance(hum, (int, float)) else 0.5),
-            "sol": (f"{sol}%", C["rouge"] if isinstance(sol, (int, float)) and sol < 30 else C["vert"], sol/100 if isinstance(sol, (int, float)) else 0.5),
-            "pluie": ("Oui" if pluie else "Non", C["bleu"] if pluie else C["gris"], 1.0 if pluie else 0.1),
+            "temp":  (f"{temp}C", C["rouge"] if isinstance(temp,(int,float)) and temp>30 else C["vert"], min(temp/50,1) if isinstance(temp,(int,float)) else 0.5),
+            "hum":   (f"{hum}%",  C["orange"] if isinstance(hum,(int,float)) and hum<40 else C["vert"],  hum/100 if isinstance(hum,(int,float)) else 0.5),
+            "sol":   (f"{sol}%",  C["rouge"] if isinstance(sol,(int,float)) and sol<30 else C["vert"],   sol/100 if isinstance(sol,(int,float)) else 0.5),
+            "pluie": ("OUI" if pluie else "NON", C["bleu"] if pluie else C["gris"], 1.0 if pluie else 0.05),
         }
-        
         for key, (txt, color, ratio) in configs.items():
             lbl, bar = self._vals[key]
             lbl.configure(text=txt, fg=color)
             bar.configure(bg=color)
-            bar.place(relwidth=min(max(ratio, 0), 1))
-
+            bar.place(relwidth=min(max(ratio,0),1))
+        self._log("DATA", f"T:{temp}C H:{hum}% Sol:{sol}% Pluie:{'OUI' if pluie else 'NON'}")
         self.lbl_statut.configure(
-            text=f"MAJ: {time.strftime('%H:%M:%S')}",
-            fg=C["gris"]
-        )
-
-    def _card(self, parent, titre=""):
-        """Helper pour creer une carte"""
-        wrapper = tk.Frame(parent, bg=C["accent"], pady=1, padx=1)
-        wrapper.pack(fill="x", padx=15, pady=8)
-
-        card = tk.Frame(wrapper, bg=C["carte"], padx=20, pady=16)
-        card.pack(fill="x")
-
-        if titre:
-            tk.Label(
-                card,
-                text=titre,
-                font=("Segoe UI", 11, "bold"),
-                bg=C["carte"],
-                fg=C["accent"]
-            ).pack(anchor="w", pady=(0, 8))
-            tk.Frame(card, bg=C["gris2"], height=1).pack(fill="x", pady=(0, 10))
-
-        return card
+            text=f"[{time.strftime('%H:%M:%S')}] Derniere mise a jour",
+            fg=C["gris"])
 
 
-# ══════════════════════════════════════════
-# APP PRINCIPALE
-# ══════════════════════════════════════════
 class App:
     def __init__(self):
         self.fen = tk.Tk()
-        self.fen.title("Serre Connectee")
+        self.fen.title("Serre Connectee v1.0")
         self.fen.configure(bg=C["fond"])
-        self.fen.geometry("900x700")
+        self.fen.geometry("980x750")
         self.fen.resizable(False, False)
-
+        init_db()
         self.page = None
         self._connexion()
 
     def _connexion(self):
-        if self.page:
-            self.page.destroy()
+        if self.page: self.page.destroy()
         self.page = PageConnexion(self.fen, self._dashboard)
         self.page.pack(fill="both", expand=True)
 
     def _dashboard(self, uid, email):
-        if self.page:
-            self.page.destroy()
+        if self.page: self.page.destroy()
         self.page = PageDashboard(self.fen, uid, email, self._connexion)
         self.page.pack(fill="both", expand=True)
 
-    def lancer(self):
+    def run(self):
         self.fen.mainloop()
 
 if __name__ == "__main__":
-    App().lancer()
+    App().run()
