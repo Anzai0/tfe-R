@@ -1,0 +1,732 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+import RPi.GPIO as GPIO
+import time
+from datetime import datetime
+import threading
+import board
+import adafruit_dht
+from PIL import Image, ImageDraw
+import io
+
+# ===== CONFIGURATION GPIO =====
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+
+# Sorties (Contrôle)
+VENTILATEUR_PIN = 24
+HUMIDIFICATEUR_PIN = 17
+LUMIERE_PIN = 27
+BUZZER_PIN = 23
+
+GPIO.setup(VENTILATEUR_PIN, GPIO.OUT)
+GPIO.setup(HUMIDIFICATEUR_PIN, GPIO.OUT)
+GPIO.setup(LUMIERE_PIN, GPIO.OUT)
+GPIO.setup(BUZZER_PIN, GPIO.OUT)
+
+# Capteur DHT22
+try:
+    dht_device = adafruit_dht.DHT22(board.D4)
+except:
+    dht_device = None
+
+# ===== CONSTANTES DESIGN =====
+BG_PRIMARY = "#0D1117"
+BG_SECONDARY = "#161B22"
+BG_TERTIARY = "#21262D"
+ACCENT_BLUE = "#58A6FF"
+ACCENT_GREEN = "#3FB950"
+ACCENT_RED = "#F85149"
+ACCENT_YELLOW = "#D29922"
+TEXT_PRIMARY = "#C9D1D9"
+TEXT_SECONDARY = "#8B949E"
+
+# ===== VARIABLES GLOBALES =====
+etat_ventilateur = False
+etat_humidificateur = False
+etat_lumiere = False
+alarme_active = False
+mode_automatique_active = False
+
+donnees_capteurs = {
+    'temperature': 22.0,
+    'humidite': 55.0,
+    'heure': '00:00:00',
+    'historique_temp': [],
+    'historique_humidite': [],
+    'alarmes': []
+}
+
+# Seuils
+SEUIL_TEMP_MIN = 15
+SEUIL_TEMP_MAX = 30
+SEUIL_HUMIDITE_MIN = 30
+SEUIL_HUMIDITE_MAX = 80
+
+# ===== CLASSE ALERTE MODERNE =====
+class AlerteWindow:
+    def __init__(self, parent, titre, message, type_alerte="warning"):
+        self.window = tk.Toplevel(parent)
+        self.window.geometry("500x250")
+        self.window.config(bg=BG_PRIMARY)
+        self.window.attributes('-topmost', True)
+        
+        # Barre de couleur en haut
+        if type_alerte == "danger":
+            couleur = ACCENT_RED
+        elif type_alerte == "warning":
+            couleur = ACCENT_YELLOW
+        else:
+            couleur = ACCENT_BLUE
+        
+        barre = tk.Frame(self.window, bg=couleur, height=5)
+        barre.pack(fill=tk.X)
+        
+        # Titre
+        titre_label = tk.Label(
+            self.window,
+            text=titre,
+            font=("Segoe UI", 16, "bold"),
+            bg=BG_PRIMARY,
+            fg=TEXT_PRIMARY,
+            pady=20
+        )
+        titre_label.pack()
+        
+        # Message
+        msg_label = tk.Label(
+            self.window,
+            text=message,
+            font=("Segoe UI", 12),
+            bg=BG_PRIMARY,
+            fg=TEXT_SECONDARY,
+            wraplength=450,
+            justify=tk.CENTER
+        )
+        msg_label.pack(pady=10)
+        
+        # Bouton OK
+        btn_ok = tk.Button(
+            self.window,
+            text="Fermer",
+            font=("Segoe UI", 11, "bold"),
+            bg=couleur,
+            fg="white",
+            border=0,
+            padx=30,
+            pady=10,
+            cursor="hand2",
+            command=self.window.destroy
+        )
+        btn_ok.pack(pady=20)
+
+# ===== FONCTION BUZZER =====
+def sonner_buzzer(duree=0.3, fois=3):
+    """Buzzer avec pattern de son"""
+    for i in range(fois):
+        GPIO.output(BUZZER_PIN, GPIO.HIGH)
+        time.sleep(duree)
+        GPIO.output(BUZZER_PIN, GPIO.LOW)
+        time.sleep(duree * 0.5)
+
+def alerte_buzzer_async():
+    """Lance le buzzer en thread"""
+    thread = threading.Thread(target=sonner_buzzer, args=(0.2, 5), daemon=True)
+    thread.start()
+
+# ===== FONCTIONS CAPTEURS =====
+def lire_capteurs():
+    """Lit les capteurs DHT22"""
+    try:
+        if dht_device is None:
+            # Simulation
+            import random
+            return {
+                'temperature': 22 + random.uniform(-2, 2),
+                'humidite': 60 + random.uniform(-10, 10)
+            }
+        
+        temperature = dht_device.temperature
+        humidite = dht_device.humidity
+        
+        if temperature is not None and humidite is not None:
+            return {
+                'temperature': temperature,
+                'humidite': humidite
+            }
+    except RuntimeError:
+        pass
+    
+    return None
+
+def verifier_alarmes(temp, humidite):
+    """Vérifie les seuils de danger"""
+    alarmes = []
+    
+    if temp > SEUIL_TEMP_MAX:
+        alarmes.append(("TEMPERATURE TROP ELEVEE", f"Temperature: {temp:.1f}C - Seuil Max: {SEUIL_TEMP_MAX}C", "danger"))
+    elif temp < SEUIL_TEMP_MIN:
+        alarmes.append(("TEMPERATURE TROP BASSE", f"Temperature: {temp:.1f}C - Seuil Min: {SEUIL_TEMP_MIN}C", "warning"))
+    
+    if humidite > SEUIL_HUMIDITE_MAX:
+        alarmes.append(("HUMIDITE TROP ELEVEE", f"Humidite: {humidite:.1f}% - Seuil Max: {SEUIL_HUMIDITE_MAX}%", "danger"))
+    elif humidite < SEUIL_HUMIDITE_MIN:
+        alarmes.append(("HUMIDITE TROP BASSE", f"Humidite: {humidite:.1f}% - Seuil Min: {SEUIL_HUMIDITE_MIN}%", "warning"))
+    
+    return alarmes
+
+# ===== FONCTIONS CONTROLE VENTILATEUR =====
+def toggle_ventilateur():
+    global etat_ventilateur
+    if etat_ventilateur:
+        etat_ventilateur = False
+        GPIO.output(VENTILATEUR_PIN, GPIO.LOW)
+        btn_ventilateur.config(
+            text="Ventilateur\nArrête",
+            bg=BG_TERTIARY,
+            fg=ACCENT_RED
+        )
+        label_vent_status.config(text="Arrête", fg=ACCENT_RED)
+        ajouter_log("Ventilateur desactive")
+    else:
+        etat_ventilateur = True
+        GPIO.output(VENTILATEUR_PIN, GPIO.HIGH)
+        btn_ventilateur.config(
+            text="Ventilateur\nActif",
+            bg=ACCENT_BLUE,
+            fg="white"
+        )
+        label_vent_status.config(text="Actif", fg=ACCENT_GREEN)
+        ajouter_log("Ventilateur active")
+
+# ===== FONCTIONS CONTROLE HUMIDIFICATEUR =====
+def toggle_humidificateur():
+    global etat_humidificateur
+    if etat_humidificateur:
+        etat_humidificateur = False
+        GPIO.output(HUMIDIFICATEUR_PIN, GPIO.LOW)
+        btn_humidificateur.config(
+            text="Humidificateur\nArrête",
+            bg=BG_TERTIARY,
+            fg=ACCENT_RED
+        )
+        label_humid_status.config(text="Arrête", fg=ACCENT_RED)
+        ajouter_log("Humidificateur desactive")
+    else:
+        etat_humidificateur = True
+        GPIO.output(HUMIDIFICATEUR_PIN, GPIO.HIGH)
+        btn_humidificateur.config(
+            text="Humidificateur\nActif",
+            bg=ACCENT_BLUE,
+            fg="white"
+        )
+        label_humid_status.config(text="Actif", fg=ACCENT_GREEN)
+        ajouter_log("Humidificateur active")
+
+# ===== FONCTIONS CONTROLE LUMIERE =====
+def toggle_lumiere():
+    global etat_lumiere
+    if etat_lumiere:
+        etat_lumiere = False
+        GPIO.output(LUMIERE_PIN, GPIO.LOW)
+        btn_lumiere.config(
+            text="Lumiere\nEteinte",
+            bg=BG_TERTIARY,
+            fg=ACCENT_RED
+        )
+        label_light_status.config(text="Eteinte", fg=ACCENT_RED)
+        ajouter_log("Lumiere eteinte")
+    else:
+        etat_lumiere = True
+        GPIO.output(LUMIERE_PIN, GPIO.HIGH)
+        btn_lumiere.config(
+            text="Lumiere\nAllumee",
+            bg=ACCENT_YELLOW,
+            fg="white"
+        )
+        label_light_status.config(text="Allumee", fg=ACCENT_GREEN)
+        ajouter_log("Lumiere allumee")
+
+# ===== MODE AUTOMATIQUE =====
+def toggle_mode_auto():
+    global mode_automatique_active
+    mode_automatique_active = not mode_automatique_active
+    
+    if mode_automatique_active:
+        btn_auto.config(bg=ACCENT_GREEN, text="Mode Auto\nACTIF")
+        label_auto_status.config(text="ACTIF", fg=ACCENT_GREEN)
+        ajouter_log("Mode automatique active")
+    else:
+        btn_auto.config(bg=BG_TERTIARY, text="Mode Auto\nInactif")
+        label_auto_status.config(text="Inactif", fg=ACCENT_RED)
+        ajouter_log("Mode automatique desactive")
+
+def logique_auto():
+    """Logique automatique"""
+    while True:
+        try:
+            if mode_automatique_active:
+                temp = donnees_capteurs['temperature']
+                humidite = donnees_capteurs['humidite']
+                
+                # Controle temperature
+                if temp > SEUIL_TEMP_MAX and not etat_ventilateur:
+                    toggle_ventilateur()
+                elif temp < SEUIL_TEMP_MIN and not etat_lumiere:
+                    toggle_lumiere()
+                
+                # Controle humidite
+                if humidite > SEUIL_HUMIDITE_MAX and not etat_ventilateur:
+                    toggle_ventilateur()
+                elif humidite < SEUIL_HUMIDITE_MIN and not etat_humidificateur:
+                    toggle_humidificateur()
+            
+            time.sleep(3)
+        except Exception as e:
+            print(f"Erreur auto: {e}")
+            time.sleep(3)
+
+# ===== THREAD CAPTEURS =====
+def lire_capteurs_loop():
+    """Boucle de lecture des capteurs"""
+    last_alarmes = []
+    
+    while True:
+        try:
+            donnees = lire_capteurs()
+            if donnees:
+                temp = donnees['temperature']
+                humidite = donnees['humidite']
+                
+                donnees_capteurs['temperature'] = temp
+                donnees_capteurs['humidite'] = humidite
+                donnees_capteurs['heure'] = datetime.now().strftime("%H:%M:%S")
+                
+                # Historique
+                donnees_capteurs['historique_temp'].append(temp)
+                donnees_capteurs['historique_humidite'].append(humidite)
+                
+                if len(donnees_capteurs['historique_temp']) > 120:
+                    donnees_capteurs['historique_temp'].pop(0)
+                    donnees_capteurs['historique_humidite'].pop(0)
+                
+                # Verification alarmes
+                alarmes = verifier_alarmes(temp, humidite)
+                
+                if alarmes and alarmes != last_alarmes:
+                    alerte_buzzer_async()
+                    for titre, msg, type_alerte in alarmes:
+                        AlerteWindow(root, titre, msg, type_alerte)
+                    last_alarmes = alarmes
+                elif not alarmes:
+                    last_alarmes = []
+                
+                donnees_capteurs['alarmes'] = alarmes
+                mettre_a_jour_interface()
+            
+            time.sleep(2)
+        except Exception as e:
+            print(f"Erreur: {e}")
+            time.sleep(2)
+
+# ===== MISE A JOUR INTERFACE =====
+def mettre_a_jour_interface():
+    """Met a jour l'interface"""
+    try:
+        temp = donnees_capteurs['temperature']
+        humidite = donnees_capteurs['humidite']
+        heure = donnees_capteurs['heure']
+        
+        # Couleur barre de statut
+        if temp > SEUIL_TEMP_MAX or humidite > SEUIL_HUMIDITE_MAX:
+            barre_statut.config(bg=ACCENT_RED)
+            label_status_bar.config(text="ALERTE: Seuils depasses", fg=ACCENT_RED)
+        elif temp < SEUIL_TEMP_MIN or humidite < SEUIL_HUMIDITE_MIN:
+            barre_statut.config(bg=ACCENT_YELLOW)
+            label_status_bar.config(text="ATTENTION: Seuils bas", fg=ACCENT_YELLOW)
+        else:
+            barre_statut.config(bg=ACCENT_GREEN)
+            label_status_bar.config(text="NORMAL: Tous les seuils OK", fg=ACCENT_GREEN)
+        
+        # Couleurs capteurs
+        if temp > SEUIL_TEMP_MAX:
+            couleur_temp = ACCENT_RED
+        elif temp < SEUIL_TEMP_MIN:
+            couleur_temp = ACCENT_BLUE
+        else:
+            couleur_temp = ACCENT_GREEN
+        
+        if humidite > SEUIL_HUMIDITE_MAX or humidite < SEUIL_HUMIDITE_MIN:
+            couleur_humid = ACCENT_RED
+        else:
+            couleur_humid = ACCENT_GREEN
+        
+        # Mettre a jour les labels
+        label_temp_value.config(text=f"{temp:.1f}C", fg=couleur_temp)
+        label_humid_value.config(text=f"{humidite:.1f}%", fg=couleur_humid)
+        label_heure_value.config(text=heure)
+        
+        # Stats
+        if donnees_capteurs['historique_temp']:
+            temp_moy = sum(donnees_capteurs['historique_temp']) / len(donnees_capteurs['historique_temp'])
+            temp_min = min(donnees_capteurs['historique_temp'])
+            temp_max = max(donnees_capteurs['historique_temp'])
+            
+            label_stats.config(
+                text=f"Moyenne: {temp_moy:.1f}C | Min: {temp_min:.1f}C | Max: {temp_max:.1f}C"
+            )
+    
+    except Exception as e:
+        print(f"Erreur interface: {e}")
+
+def ajouter_log(message):
+    """Ajoute un message au log"""
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    texte = f"[{timestamp}] {message}\n"
+    text_log.config(state=tk.NORMAL)
+    text_log.insert(tk.END, texte)
+    text_log.see(tk.END)
+    text_log.config(state=tk.DISABLED)
+
+# ===== INTERFACE TKINTER =====
+root = tk.Tk()
+root.title("Serre Intelligente - Control Panel")
+root.geometry("1400x850")
+root.config(bg=BG_PRIMARY)
+
+# Style ttk
+style = ttk.Style()
+style.theme_use('clam')
+
+# ===== BARRE DE STATUT EN HAUT =====
+barre_statut = tk.Frame(root, height=8, bg=ACCENT_GREEN)
+barre_statut.pack(fill=tk.X)
+
+label_status_bar = tk.Label(
+    root,
+    text="NORMAL: Tous les seuils OK",
+    font=("Segoe UI", 11, "bold"),
+    bg=BG_PRIMARY,
+    fg=ACCENT_GREEN,
+    pady=10
+)
+label_status_bar.pack(fill=tk.X)
+
+# ===== TITRE PRINCIPAL =====
+titre = tk.Label(
+    root,
+    text="SERRE INTELLIGENTE - CONTROL PANEL",
+    font=("Segoe UI", 24, "bold"),
+    bg=BG_PRIMARY,
+    fg=ACCENT_BLUE,
+    pady=15
+)
+titre.pack()
+
+# ===== FRAME PRINCIPAL =====
+frame_principal = tk.Frame(root, bg=BG_PRIMARY)
+frame_principal.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+
+# ========== COLONNE GAUCHE - CONTROLES ==========
+frame_controls = tk.Frame(frame_principal, bg=BG_SECONDARY, relief=tk.FLAT, bd=1)
+frame_controls.pack(side=tk.LEFT, fill=tk.BOTH, padx=10, pady=10, ipadx=20, ipady=20)
+
+label_controls_title = tk.Label(
+    frame_controls,
+    text="CONTROLES",
+    font=("Segoe UI", 14, "bold"),
+    bg=BG_SECONDARY,
+    fg=ACCENT_BLUE,
+    pady=10
+)
+label_controls_title.pack()
+
+# Bouton Ventilateur
+btn_ventilateur = tk.Button(
+    frame_controls,
+    text="Ventilateur\nArrette",
+    font=("Segoe UI", 12, "bold"),
+    bg=BG_TERTIARY,
+    fg=ACCENT_RED,
+    border=0,
+    padx=20,
+    pady=20,
+    cursor="hand2",
+    command=toggle_ventilateur,
+    activebackground=ACCENT_BLUE,
+    activeforeground="white"
+)
+btn_ventilateur.pack(fill=tk.X, pady=10)
+
+label_vent_status = tk.Label(
+    frame_controls,
+    text="Arrette",
+    font=("Segoe UI", 10),
+    bg=BG_SECONDARY,
+    fg=ACCENT_RED
+)
+label_vent_status.pack()
+
+# Bouton Humidificateur
+btn_humidificateur = tk.Button(
+    frame_controls,
+    text="Humidificateur\nArrette",
+    font=("Segoe UI", 12, "bold"),
+    bg=BG_TERTIARY,
+    fg=ACCENT_RED,
+    border=0,
+    padx=20,
+    pady=20,
+    cursor="hand2",
+    command=toggle_humidificateur,
+    activebackground=ACCENT_BLUE,
+    activeforeground="white"
+)
+btn_humidificateur.pack(fill=tk.X, pady=10)
+
+label_humid_status = tk.Label(
+    frame_controls,
+    text="Arrette",
+    font=("Segoe UI", 10),
+    bg=BG_SECONDARY,
+    fg=ACCENT_RED
+)
+label_humid_status.pack()
+
+# Bouton Lumiere
+btn_lumiere = tk.Button(
+    frame_controls,
+    text="Lumiere\nEteinte",
+    font=("Segoe UI", 12, "bold"),
+    bg=BG_TERTIARY,
+    fg=ACCENT_RED,
+    border=0,
+    padx=20,
+    pady=20,
+    cursor="hand2",
+    command=toggle_lumiere,
+    activebackground=ACCENT_YELLOW,
+    activeforeground="white"
+)
+btn_lumiere.pack(fill=tk.X, pady=10)
+
+label_light_status = tk.Label(
+    frame_controls,
+    text="Eteinte",
+    font=("Segoe UI", 10),
+    bg=BG_SECONDARY,
+    fg=ACCENT_RED
+)
+label_light_status.pack()
+
+# Bouton Mode Auto
+btn_auto = tk.Button(
+    frame_controls,
+    text="Mode Auto\nInactif",
+    font=("Segoe UI", 12, "bold"),
+    bg=BG_TERTIARY,
+    fg=ACCENT_RED,
+    border=0,
+    padx=20,
+    pady=20,
+    cursor="hand2",
+    command=toggle_mode_auto,
+    activebackground=ACCENT_GREEN,
+    activeforeground="white"
+)
+btn_auto.pack(fill=tk.X, pady=10)
+
+label_auto_status = tk.Label(
+    frame_controls,
+    text="Inactif",
+    font=("Segoe UI", 10),
+    bg=BG_SECONDARY,
+    fg=ACCENT_RED
+)
+label_auto_status.pack()
+
+# ========== COLONNE MILIEU - CAPTEURS ==========
+frame_sensors = tk.Frame(frame_principal, bg=BG_SECONDARY, relief=tk.FLAT, bd=1)
+frame_sensors.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10, ipadx=20, ipady=20)
+
+label_sensors_title = tk.Label(
+    frame_sensors,
+    text="CAPTEURS EN TEMPS REEL",
+    font=("Segoe UI", 14, "bold"),
+    bg=BG_SECONDARY,
+    fg=ACCENT_BLUE,
+    pady=10
+)
+label_sensors_title.pack()
+
+# Conteneur Temperature
+frame_temp = tk.Frame(frame_sensors, bg=BG_TERTIARY, relief=tk.FLAT, bd=2)
+frame_temp.pack(fill=tk.X, pady=10, padx=5, ipady=15)
+
+label_temp_title = tk.Label(
+    frame_temp,
+    text="TEMPERATURE",
+    font=("Segoe UI", 11, "bold"),
+    bg=BG_TERTIARY,
+    fg=TEXT_SECONDARY
+)
+label_temp_title.pack()
+
+label_temp_value = tk.Label(
+    frame_temp,
+    text="--C",
+    font=("Segoe UI", 32, "bold"),
+    bg=BG_TERTIARY,
+    fg=ACCENT_GREEN
+)
+label_temp_value.pack()
+
+label_temp_seuil = tk.Label(
+    frame_temp,
+    text=f"Seuil: {SEUIL_TEMP_MIN}C - {SEUIL_TEMP_MAX}C",
+    font=("Segoe UI", 9),
+    bg=BG_TERTIARY,
+    fg=TEXT_SECONDARY
+)
+label_temp_seuil.pack()
+
+# Conteneur Humidite
+frame_humid = tk.Frame(frame_sensors, bg=BG_TERTIARY, relief=tk.FLAT, bd=2)
+frame_humid.pack(fill=tk.X, pady=10, padx=5, ipady=15)
+
+label_humid_title = tk.Label(
+    frame_humid,
+    text="HUMIDITE",
+    font=("Segoe UI", 11, "bold"),
+    bg=BG_TERTIARY,
+    fg=TEXT_SECONDARY
+)
+label_humid_title.pack()
+
+label_humid_value = tk.Label(
+    frame_humid,
+    text="--%",
+    font=("Segoe UI", 32, "bold"),
+    bg=BG_TERTIARY,
+    fg=ACCENT_GREEN
+)
+label_humid_value.pack()
+
+label_humid_seuil = tk.Label(
+    frame_humid,
+    text=f"Seuil: {SEUIL_HUMIDITE_MIN}% - {SEUIL_HUMIDITE_MAX}%",
+    font=("Segoe UI", 9),
+    bg=BG_TERTIARY,
+    fg=TEXT_SECONDARY
+)
+label_humid_seuil.pack()
+
+# Heure et Stats
+frame_info = tk.Frame(frame_sensors, bg=BG_TERTIARY, relief=tk.FLAT, bd=2)
+frame_info.pack(fill=tk.X, pady=10, padx=5, ipady=10)
+
+label_heure_title = tk.Label(
+    frame_info,
+    text="HEURE",
+    font=("Segoe UI", 10, "bold"),
+    bg=BG_TERTIARY,
+    fg=TEXT_SECONDARY
+)
+label_heure_title.pack()
+
+label_heure_value = tk.Label(
+    frame_info,
+    text="00:00:00",
+    font=("Segoe UI", 16, "bold"),
+    bg=BG_TERTIARY,
+    fg=ACCENT_BLUE
+)
+label_heure_value.pack()
+
+label_stats = tk.Label(
+    frame_sensors,
+    text="Moyenne: --C | Min: --C | Max: --C",
+    font=("Segoe UI", 10),
+    bg=BG_SECONDARY,
+    fg=TEXT_SECONDARY,
+    pady=10
+)
+label_stats.pack(fill=tk.X, padx=5)
+
+# ========== COLONNE DROITE - LOG ==========
+frame_log_section = tk.Frame(frame_principal, bg=BG_SECONDARY, relief=tk.FLAT, bd=1)
+frame_log_section.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10, ipadx=20, ipady=20)
+
+label_log_title = tk.Label(
+    frame_log_section,
+    text="HISTORIQUE DES ACTIONS",
+    font=("Segoe UI", 14, "bold"),
+    bg=BG_SECONDARY,
+    fg=ACCENT_BLUE,
+    pady=10
+)
+label_log_title.pack()
+
+# Scrollbar pour le log
+scrollbar = tk.Scrollbar(frame_log_section)
+scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+text_log = tk.Text(
+    frame_log_section,
+    height=25,
+    width=40,
+    bg=BG_TERTIARY,
+    fg=ACCENT_GREEN,
+    font=("Courier New", 9),
+    yscrollcommand=scrollbar.set,
+    border=0,
+    padx=10,
+    pady=10
+)
+text_log.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+scrollbar.config(command=text_log.yview)
+text_log.config(state=tk.DISABLED)
+
+# ===== FOOTER =====
+footer = tk.Label(
+    root,
+    text="Serre Intelligente v2.0 | Raspberry Pi 4 | DHT22 Sensors | Real-time Monitoring",
+    font=("Segoe UI", 9),
+    bg=BG_SECONDARY,
+    fg=TEXT_SECONDARY,
+    pady=8
+)
+footer.pack(side=tk.BOTTOM, fill=tk.X)
+
+# ===== DEMARRAGE THREADS =====
+ajouter_log("Serre demarree")
+ajouter_log("Capteurs initialises")
+
+thread_capteurs = threading.Thread(target=lire_capteurs_loop, daemon=True)
+thread_capteurs.start()
+
+thread_auto = threading.Thread(target=logique_auto, daemon=True)
+thread_auto.start()
+
+# ===== GESTION FERMETURE =====
+def on_closing():
+    ajouter_log("Fermeture de l'application...")
+    
+    # Eteindre tous les appareils
+    if etat_ventilateur:
+        toggle_ventilateur()
+    if etat_humidificateur:
+        toggle_humidificateur()
+    if etat_lumiere:
+        toggle_lumiere()
+    
+    GPIO.output(BUZZER_PIN, GPIO.LOW)
+    
+    time.sleep(0.5)
+    GPIO.cleanup()
+    root.destroy()
+
+root.protocol("WM_DELETE_WINDOW", on_closing)
+
+# ===== LANCEMENT =====
+root.mainloop()
