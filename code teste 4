@@ -35,7 +35,7 @@ C = {
     "console_bg":  "#04060A"   
 }
 
-# --- COMPOSANT : BOUTON INTERRUPTEUR (TOGGLE SWITCH ANIMÉ AVEC TEXTE) ---
+# --- COMPOSANT : BOUTON INTERRUPTEUR ---
 class ToggleSwitch(tk.Canvas):
     def __init__(self, parent, command=None, width=75, height=30):
         super().__init__(parent, width=width, height=height, bg=C["bg_input"], bd=0, highlightthickness=0, cursor="hand2")
@@ -285,7 +285,8 @@ class PageDashboard(tk.Frame):
 
         # --- COLONNE DE GAUCHE ---
         col_gauche = tk.Frame(workspace, bg=C["bg_main"])
-        col_gauche.pack(side="left", fill="both", expand=True, padx=(0, 15))
+        # CORRECTION : Remplacement de marginRight par un padding standard tkinter (padx)
+        col_gauche.pack(side="left", fill="both", expand=True, padx=(0, 10))
 
         # Capteurs Grid
         grid_capteurs = tk.Frame(col_gauche, bg=C["bg_main"])
@@ -365,7 +366,7 @@ class PageDashboard(tk.Frame):
         self.table_stats.tag_configure("pair", background="#121A2E", foreground="#FFFFFF")
         self.table_stats.tag_configure("impair", background="#0A0F1C", foreground="#FFFFFF")
 
-        # --- COLONNE DE DROITE (CONSOLE AVEC RETOURS INTELLIGENTS) ---
+        # --- COLONNE DE DROITE (CONSOLE ENTIÈREMENT SÉCURISÉE) ---
         col_droite = tk.Frame(workspace, bg=C["bg_card"], width=320, highlightthickness=1, highlightbackground=C["border"], padx=15, pady=15)
         col_droite.pack(side="right", fill="both")
         col_droite.pack_propagate(False)
@@ -375,15 +376,14 @@ class PageDashboard(tk.Frame):
         c_wrapper = tk.Frame(col_droite, bg=C["console_bg"], pady=5, padx=5, highlightthickness=1, highlightbackground=C["border"])
         c_wrapper.pack(fill="both", expand=True, pady=10)
 
-        # CONFIGURATION EN WRAP="WORD" AVEC RE-INDENTATION DES LIGNES SECONDAIRES
-        self.console = tk.Text(c_wrapper, bg=C["console_bg"], fg=C["text_main"], font=("Consolas", 8.5), relief="flat", bd=0, state="disabled", wrap="word")
+        # CORRECTION : wrap="char" et taille "8" (entier) pour éviter l'erreur Tkinter et le scroll horizontal
+        self.console = tk.Text(c_wrapper, bg=C["console_bg"], fg=C["text_main"], font=("Consolas", 8), relief="flat", bd=0, state="disabled", wrap="char")
         self.console.pack(fill="both", expand=True)
 
-        # Application de tags de couleurs et de mise en page (lstyle indente le texte qui dépasse à la ligne)
-        self.console.tag_configure("INFO", foreground=C["info"], lmargin2=15)
-        self.console.tag_configure("OK", foreground=C["accent"], lmargin2=15)
-        self.console.tag_configure("WARN", foreground=C["warning"], lmargin2=15)
-        self.console.tag_configure("ERR", foreground=C["danger"], lmargin2=15)
+        self.console.tag_configure("INFO", foreground=C["info"])
+        self.console.tag_configure("OK", foreground=C["accent"])
+        self.console.tag_configure("WARN", foreground=C["warning"])
+        self.console.tag_configure("ERR", foreground=C["danger"])
         self.console.tag_configure("TEXT_MUTED", foreground=C["text_muted"])
 
         btn_clear = tk.Button(col_droite, text="EFFACER LE LOG", command=self._clear_console)
@@ -607,8 +607,8 @@ class PageDashboard(tk.Frame):
         self.console.configure(state="normal")
         ts = time.strftime("%H:%M:%S")
         self.console.insert("end", f"[{ts}] ", "TEXT_MUTED")
-        # Ajout du tag 'level' qui applique automatiquement le lmargin2 pour les lignes coupées
-        self.console.insert("end", f"[{level}] {msg}\n", level)
+        self.console.insert("end", f"[{level}] ", level)
+        self.console.insert("end", f"{msg}\n")
         self.console.configure(state="disabled")
         self.console.see("end")
 
