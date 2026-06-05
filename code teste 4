@@ -1,0 +1,645 @@
+import tkinter as tk
+from tkinter import messagebox, ttk
+import threading
+import time
+import pymysql
+pymysql.install_as_MySQLdb()
+import pyrebase
+
+# --- CONFIGURATION FIREBASE ---
+firebase_config = {
+    "apiKey": "AIzaSyA8zkZrgGnxJzDTxCr3-gZ96DuGAn5B-OE",
+    "authDomain": "serre-connecte-60616.firebaseapp.com",
+    "projectId": "serre-connecte-60616",
+    "storageBucket": "serre-connecte-60616.firebasestorage.app",
+    "messagingSenderId": "217991792040",
+    "appId": "1:217991792040:web:ae6fd4a5e0953418aec99d",
+    "databaseURL": "https://serre-connecte-60616-default-rtdb.europe-west1.firebasedatabase.app"
+}
+firebase = pyrebase.initialize_app(firebase_config)
+auth = firebase.auth()
+db = firebase.database()
+
+# --- PALETTE DE COULEURS PREMIUM ---
+C = {
+    "bg_main":     "#070A13",  # Fond général sombre haut de gamme
+    "bg_card":     "#0F1524",  # Fonds des conteneurs
+    "bg_input":    "#161F33",  # Entrées et jauges vides
+    "text_main":   "#FFFFFF",  # Texte principal
+    "text_muted":  "#526484",  # Texte secondaire / légendes
+    "accent":      "#00E676",  # Vert connecté (ON)
+    "danger":      "#FF3333",  # Rouge alerte (OFF)
+    "warning":     "#FFA000",  # Orange
+    "info":        "#00B0FF",  # Bleu néon
+    "border":      "#1E293B",  # Bordures fines et discrètes
+    "console_bg":  "#04060A"   # Fond terminal
+}
+
+# --- COMPOSANT : BOUTON INTERRUPTEUR (TOGGLE SWITCH ANIMÉ) ---
+class ToggleSwitch(tk.Canvas):
+    def __init__(self, parent, command=None, width=60, height=30):
+        super().__init__(parent, width=width, height=height, bg=C["bg_input"], bd=0, highlightthickness=0, cursor="hand2")
+        self.command = command
+        self.state = False
+        self.width = width
+        self.height = height
+        
+        # Dimensions internes
+        self.radius = height // 2
+        self.circle_radius = self.radius - 3
+        
+        # Positions x du rond (OFF à gauche, ON à droite)
+        self.x_off = self.radius
+        self.x_on = width - self.radius
+        self.current_x = self.x_off
+        
+        self.bind("<Button-1>", self._toggle)
+        self._draw()
+
+    def _draw(self):
+        self.delete("all")
+        # Couleur de fond selon l'état
+        bg_color = C["accent"] if self.state else C["danger"]
+        
+        # Dessin du fond (pilule arrondie)
+        self.create_oval(0, 0, self.height, self.height, fill=bg_color, outline="")
+        self.create_oval(self.width - self.height, 0, self.width, self.height, fill=bg_color, outline="")
+        self.create_rectangle(self.radius, 0, self.width - self.radius, self.height, fill=bg_color, outline="")
+        
+        # Dessin du curseur blanc coulissant
+        self.create_oval(self.current_x - self.circle_radius, self.radius - self.circle_radius,
+                         self.current_x + self.circle_radius, self.radius + self.circle_radius,
+                         fill="#FFFFFF", outline="")
+
+    def _toggle(self, event):
+        self.state = not self.state
+        self._animate()
+        if self.command:
+            self.command(self.state)
+
+    def _animate(self):
+        target_x = self.x_on if self.state else self.x_off
+        steps = 4
+        diff = (target_x - self.current_x) / steps
+        
+        def step(count):
+            if count < steps:
+                self.current_x += diff
+                self._draw()
+                self.after(20, lambda: step(count + 1))
+            else:
+                self.current_x = target_x
+                self._draw()
+                
+        step(0)
+
+    def set_state(self, state):
+        if self.state != state:
+            self.state = state
+            self.current_x = self.x_on if state else self.x_off
+            self._draw()
+
+# --- FONCTIONS DE BASE DE DONNÉES ---
+def get_db():
+    return pymysql.connect(host="localhost", user="ravza",
+                           password="ravza", database="serre",
+                           charset="utf8mb4")
+
+def init_db():
+    try:
+        conn = get_db(); cur = conn.cursor()
+        cur.execute("""CREATE TABLE IF NOT EXISTS capteurs (
+            id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(255), 
+            temperature FLOAT, humidite_air FLOAT, humidite_sol FLOAT, pluie BOOLEAN,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS plantes (
+            id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(255), nom VARCHAR(100),
+            temp_max FLOAT, humidite_min FLOAT, eau_min FLOAT)""")
+        conn.commit(); cur.close(); conn.close()
+    except Exception as e:
+        print(f"[DB] Erreur init: {e}")
+
+# --- STYLISATION DES COMPOSANTS ---
+def style_entry(e):
+    e.configure(bg=C["bg_input"], fg=C["text_main"], insertbackground=C["accent"],
+                relief="flat", bd=0, font=("Segoe UI", 11),
+                highlightthickness=1, highlightbackground=C["border"],
+                highlightcolor=C["accent"])
+
+def style_btn(b, bg=None, fg=None):
+    b.configure(bg=bg or C["accent"], fg=fg or C["bg_main"],
+                relief="flat", bd=0, font=("Segoe UI", 10, "bold"),
+                cursor="hand2", activebackground=C["accent"],
+                activeforeground=C["bg_main"])
+
+# --- VUE 1 : CONNEXION ---
+class PageConnexion(tk.Frame):
+    def __init__(self, parent, on_conn):
+        super().__init__(parent, bg=C["bg_main"])
+        self.on_conn = on_conn
+        self.mode = "connexion"
+        self._build()
+
+    def _build(self):
+        container = tk.Frame(self, bg=C["bg_card"], padx=40, pady=40, highlightthickness=1, highlightbackground=C["border"])
+        container.place(relx=0.5, rely=0.5, anchor="center", width=420)
+
+        self.lbl_title = tk.Label(container, text="Connexion", font=("Segoe UI", 24, "bold"), bg=C["bg_card"], fg=C["text_main"])
+        self.lbl_title.pack(anchor="w", pady=(0, 5))
+        
+        self.lbl_subtitle = tk.Label(container, text="SERRE CONNECTÉE", font=("Segoe UI", 10, "bold"), bg=C["bg_card"], fg=C["text_muted"])
+        self.lbl_subtitle.pack(anchor="w", pady=(0, 25))
+
+        # Email
+        tk.Label(container, text="ADRESSE EMAIL", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w")
+        self.e_email = tk.Entry(container)
+        style_entry(self.e_email)
+        self.e_email.pack(fill="x", pady=(5, 15), ipady=8)
+
+        # Mot de passe
+        tk.Label(container, text="MOT DE PASSE", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w")
+        self.e_mdp = tk.Entry(container, show="*")
+        style_entry(self.e_mdp)
+        self.e_mdp.pack(fill="x", pady=(5, 20), ipady=8)
+
+        # Bouton Valider
+        self.btn_submit = tk.Button(container, text="Se connecter", command=self._action)
+        style_btn(self.btn_submit)
+        self.btn_submit.pack(fill="x", ipady=6, pady=(0, 15))
+
+        self.btn_switch = tk.Button(container, text="Pas de compte ? Créer un compte", bg=C["bg_card"], fg=C["info"], 
+                                    bd=0, font=("Segoe UI", 9, "underline"), cursor="hand2", activebackground=C["bg_card"], activeforeground=C["text_main"])
+        self.btn_switch.configure(command=self._toggle_mode)
+        self.btn_switch.pack()
+
+        self.lbl_msg = tk.Label(container, text="", font=("Segoe UI", 9), bg=C["bg_card"], fg=C["danger"])
+        self.lbl_msg.pack(pady=(10, 0))
+
+    def _toggle_mode(self):
+        if self.mode == "connexion":
+            self.mode = "inscription"
+            self.lbl_title.configure(text="Inscription")
+            self.btn_submit.configure(text="Créer mon compte")
+            self.btn_switch.configure(text="Déjà inscrit ? Se connecter")
+        else:
+            self.mode = "connexion"
+            self.lbl_title.configure(text="Connexion")
+            self.btn_submit.configure(text="Se connecter")
+            self.btn_switch.configure(text="Pas de compte ? Créer un compte")
+
+    def _action(self):
+        email = self.e_email.get().strip()
+        mdp = self.e_mdp.get().strip()
+        if not email or not mdp:
+            self.lbl_msg.configure(text="Veuillez remplir tous les champs.")
+            return
+        
+        self.btn_submit.configure(state="disabled", text="Chargement...")
+        
+        def tache():
+            try:
+                if self.mode == "connexion":
+                    user = auth.sign_in_with_email_and_password(email, mdp)
+                else:
+                    user = auth.create_user_with_email_and_password(email, mdp)
+                uid = user["localId"]
+                self.after(0, lambda: self.on_conn(uid, email))
+            except Exception as e:
+                s = str(e)
+                msg = "Erreur d'authentification"
+                if "EMAIL_EXISTS" in s: msg = "Cet email est déjà utilisé"
+                elif "WEAK_PASSWORD" in s: msg = "Mot de passe trop court (6 car. min)"
+                elif "INVALID_EMAIL" in s: msg = "Format d'email invalide"
+                elif "EMAIL_NOT_FOUND" in s or "INVALID_PASSWORD" in s: msg = "Identifiants incorrects"
+                
+                self.after(0, lambda: [
+                    self.lbl_msg.configure(text=msg),
+                    self.btn_submit.configure(state="normal", text="Se connecter" if self.mode == "connexion" else "Créer mon compte")
+                ])
+        threading.Thread(target=tache, daemon=True).start()
+
+
+# --- VUE 2 : DASHBOARD MAGNIFIÉ + INTERRUPTEURS + TABLEAU DE STATS ---
+class PageDashboard(tk.Frame):
+    def __init__(self, parent, uid, email, on_deconn):
+        super().__init__(parent, bg=C["bg_main"])
+        self.uid = uid
+        self.email = email
+        self.on_deconn = on_deconn
+        self.plantes = []
+        self.plante_active = None
+        self.pompe_on = False
+        self.ventilo_on = False
+
+        self._configurer_styles_treeview()
+        self._charger_plantes()
+        self._build_layout()
+        self._rafraichir_donnees()
+        self._charger_historique_stats()
+
+    def _configurer_styles_treeview(self):
+        # Configuration esthétique globale des tableaux de données
+        style = ttk.Style()
+        style.theme_use("default")
+        style.configure("Treeview", bg=C["bg_card"], fg=C["text_main"], fieldbackground=C["bg_card"],
+                        rowheight=28, bd=0, font=("Segoe UI", 9), borderwidth=0)
+        style.map("Treeview", background=[("selected", C["bg_input"])], foreground=[("selected", C["accent"])])
+        style.configure("Treeview.Heading", background=C["bg_input"], foreground=C["text_muted"],
+                        relief="flat", font=("Segoe UI", 9, "bold"))
+        style.map("Treeview.Heading", background=[("active", C["bg_input"])])
+
+    def _charger_plantes(self):
+        try:
+            conn = get_db(); cur = conn.cursor()
+            cur.execute("SELECT nom, temp_max, humidite_min, eau_min FROM plantes WHERE uid=%s", (self.uid,))
+            self.plantes = [{"nom": r[0], "temp_max": r[1], "humidite_min": r[2], "eau_min": r[3]} for r in cur.fetchall()]
+            cur.close(); conn.close()
+        except:
+            self.plantes = []
+        if self.plantes: self.plante_active = self.plantes[0]
+
+    def _build_layout(self):
+        # Navbar principale
+        navbar = tk.Frame(self, bg=C["bg_card"], height=65, highlightthickness=1, highlightbackground=C["border"])
+        navbar.pack(fill="x", side="top")
+        navbar.pack_propagate(False)
+
+        tk.Label(navbar, text="SERRE CONNECTÉE", font=("Segoe UI", 14, "bold"), bg=C["bg_card"], fg=C["accent"]).pack(side="left", padx=20)
+        
+        btn_dc = tk.Button(navbar, text="Déconnexion", command=self.on_deconn, padx=15)
+        style_btn(btn_dc, bg=C["danger"], fg=C["text_main"])
+        btn_dc.pack(side="right", padx=20)
+
+        tk.Label(navbar, text=f"Utilisateur : {self.email}", font=("Segoe UI", 10), bg=C["bg_card"], fg=C["text_muted"]).pack(side="right", padx=10)
+
+        # Conteneur central étendu
+        workspace = tk.Frame(self, bg=C["bg_main"])
+        workspace.pack(fill="both", expand=True, padx=20, pady=20)
+
+        # --- COLONNE DE GAUCHE ---
+        col_gauche = tk.Frame(workspace, bg=C["bg_main"])
+        col_gauche.pack(side="left", fill="both", expand=True, padx=(0, 15))
+
+        # Jauges Grid
+        grid_capteurs = tk.Frame(col_gauche, bg=C["bg_main"])
+        grid_capteurs.pack(fill="x", pady=(0, 15))
+        
+        self._cards_widgets = {}
+        caps = [
+            ("Température", "temp", "°C", C["info"]),
+            ("Humidité de l'air", "hum", "%", C["accent"]),
+            ("Humidité du sol", "sol", "%", C["warning"]),
+            ("Pluie", "pluie", "", C["danger"])
+        ]
+        
+        for i, (nom, key, unit, color) in enumerate(caps):
+            card = tk.Frame(grid_capteurs, bg=C["bg_card"], highlightthickness=1, highlightbackground=C["border"], padx=18, pady=15)
+            card.grid(row=i//2, column=i%2, sticky="ew", padx=6, pady=6)
+            grid_capteurs.columnconfigure(i%2, weight=1)
+
+            tk.Label(card, text=nom, font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w")
+            lbl_val = tk.Label(card, text=f"-- {unit}", font=("Segoe UI", 24, "bold"), bg=C["bg_card"], fg=C["text_main"])
+            lbl_val.pack(anchor="w", pady=(2, 2))
+
+            p_bg = tk.Frame(card, bg=C["bg_input"], height=5)
+            p_bg.pack(fill="x", pady=(5, 0))
+            p_bar = tk.Frame(p_bg, bg=color, height=5)
+            p_bar.place(x=0, y=0, relwidth=0.0)
+
+            self._cards_widgets[key] = (lbl_val, p_bar, unit, color)
+
+        # Bloc Actionneurs avec boutons Glissants Animés (Toggle)
+        act_frame = tk.Frame(col_gauche, bg=C["bg_card"], highlightthickness=1, highlightbackground=C["border"], padx=20, pady=18)
+        act_frame.pack(fill="x", pady=(0, 15))
+        
+        tk.Label(act_frame, text="RELAIS ET ACTIONNEURS", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0,15))
+        
+        btn_box = tk.Frame(act_frame, bg=C["bg_card"])
+        btn_box.pack(fill="x")
+
+        # Pompe Interrupteur
+        p_sub = tk.Frame(btn_box, bg=C["bg_input"], padx=20, pady=12, highlightthickness=1, highlightbackground=C["border"])
+        p_sub.pack(side="left", fill="x", expand=True, padx=(0,10))
+        tk.Label(p_sub, text="Pompe à eau", font=("Segoe UI", 10, "bold"), bg=C["bg_input"], fg=C["text_main"]).pack(side="left")
+        self.toggle_pompe = ToggleSwitch(p_sub, command=self._api_pompe)
+        self.toggle_pompe.pack(side="right")
+
+        # Ventilateur Interrupteur
+        v_sub = tk.Frame(btn_box, bg=C["bg_input"], padx=20, pady=12, highlightthickness=1, highlightbackground=C["border"])
+        v_sub.pack(side="left", fill="x", expand=True, padx=(10,0))
+        tk.Label(v_sub, text="Ventilateur", font=("Segoe UI", 10, "bold"), bg=C["bg_input"], fg=C["text_main"]).pack(side="left")
+        self.toggle_ventilo = ToggleSwitch(v_sub, command=self._api_ventilo)
+        self.toggle_ventilo.pack(side="right")
+
+        # Zone Liste des Plantes
+        self.plant_section = tk.Frame(col_gauche, bg=C["bg_card"], highlightthickness=1, highlightbackground=C["border"], padx=20, pady=18)
+        self.plant_section.pack(fill="x", pady=(0, 15))
+        self._render_plantes()
+
+        # --- NOUVEAUTÉ : TABLEAU DE STATISTIQUES HISTORIQUES ---
+        stats_frame = tk.Frame(col_gauche, bg=C["bg_card"], highlightthickness=1, highlightbackground=C["border"], padx=20, pady=15)
+        stats_frame.pack(fill="both", expand=True)
+
+        tk.Label(stats_frame, text="TABLEAU STATISTIQUE DES CAPTEURS", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 10))
+        
+        cols = ("date", "t", "ha", "hs", "p")
+        self.table_stats = ttk.Treeview(stats_frame, columns=cols, show="headings", selectmode="none")
+        self.table_stats.pack(fill="both", expand=True)
+        
+        self.table_stats.heading("date", text="Horodatage / Date")
+        self.table_stats.heading("t", text="Température")
+        self.table_stats.heading("ha", text="Hum. Air")
+        self.table_stats.heading("hs", text="Hum. Sol")
+        self.table_stats.heading("p", text="Pluie")
+
+        self.table_stats.column("date", width=160, anchor="center")
+        self.table_stats.column("t", width=90, anchor="center")
+        self.table_stats.column("ha", width=90, anchor="center")
+        self.table_stats.column("hs", width=90, anchor="center")
+        self.table_stats.column("p", width=80, anchor="center")
+
+        # Config tags pour lignes alternées
+        self.table_stats.tag_configure("pair", background="#121B2D")
+        self.table_stats.tag_configure("impair", background=C["bg_card"])
+
+        # --- COLONNE DE DROITE (CONSOLE) ---
+        col_droite = tk.Frame(workspace, bg=C["bg_card"], width=320, highlightthickness=1, highlightbackground=C["border"], padx=15, pady=15)
+        col_droite.pack(side="right", fill="both")
+        col_droite.pack_propagate(False)
+
+        tk.Label(col_droite, text="Console", font=("Segoe UI", 10, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w")
+        
+        c_wrapper = tk.Frame(col_droite, bg=C["console_bg"], pady=5, padx=5, highlightthickness=1, highlightbackground=C["border"])
+        c_wrapper.pack(fill="both", expand=True, pady=10)
+
+        self.console = tk.Text(c_wrapper, bg=C["console_bg"], fg=C["text_main"], font=("Consolas", 9), relief="flat", bd=0, state="disabled", wrap="word")
+        self.console.pack(fill="both", expand=True)
+
+        self.console.tag_configure("INFO", foreground=C["info"])
+        self.console.tag_configure("OK", foreground=C["accent"])
+        self.console.tag_configure("WARN", foreground=C["warning"])
+        self.console.tag_configure("ERR", foreground=C["danger"])
+        self.console.tag_configure("TEXT_MUTED", foreground=C["text_muted"])
+
+        btn_clear = tk.Button(col_droite, text="EFFACER LE LOG", command=self._clear_console)
+        style_btn(btn_clear, bg=C["bg_input"], fg=C["text_muted"])
+        btn_clear.pack(fill="x")
+
+        self._log("INFO", "Système connecté à la télémétrie.")
+
+    def _charger_historique_stats(self):
+        try:
+            conn = get_db(); cur = conn.cursor()
+            cur.execute("SELECT timestamp, temperature, humidite_air, humidite_sol, pluie FROM capteurs WHERE uid=%s ORDER BY id DESC LIMIT 5", (self.uid,))
+            rows = cur.fetchall()
+            
+            # Vider le tableau existant
+            for item in self.table_stats.get_children():
+                self.table_stats.delete(item)
+                
+            for index, r in enumerate(rows):
+                tag = "pair" if index % 2 == 0 else "impair"
+                date_str = r[0].strftime("%d/%m/%Y %H:%M:%S") if r[0] else "--"
+                pluie_str = "Oui 🌧️" if r[4] else "Non ☀️"
+                self.table_stats.insert("", "end", values=(date_str, f"{r[1]} °C", f"{r[2]} %", f"{r[3]} %", pluie_str), tags=(tag,))
+                
+            cur.close(); conn.close()
+        except Exception as e:
+            pass
+        self.after(10000, self._charger_historique_stats)  # Actualisation toutes les 10s
+
+    def _render_plantes(self):
+        for w in self.plant_section.winfo_children(): w.destroy()
+        
+        top_bar = tk.Frame(self.plant_section, bg=C["bg_card"])
+        top_bar.pack(fill="x", pady=(0, 5))
+        tk.Label(top_bar, text=f"PLANTES CONFIGURÉES ({len(self.plantes)}/3)", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(side="left")
+        
+        if len(self.plantes) < 3:
+            btn_add = tk.Button(top_bar, text="+ Ajouter une plante", command=self._popup_plante)
+            style_btn(btn_add, bg=C["accent"], fg=C["bg_main"])
+            btn_add.pack(side="right", padx=5)
+
+        if not self.plantes:
+            tk.Label(self.plant_section, text="// Aucune plante enregistrée.", font=("Segoe UI", 10, "italic"), bg=C["bg_card"], fg=C["text_muted"]).pack(pady=20)
+            return
+
+        for p in self.plantes:
+            is_active = self.plante_active and self.plante_active["nom"] == p["nom"]
+            bg_item = C["bg_input"] if is_active else C["bg_card"]
+            b_color = C["accent"] if is_active else C["border"]
+
+            item = tk.Frame(self.plant_section, bg=bg_item, highlightthickness=1, highlightbackground=b_color, padx=15, pady=8)
+            item.pack(fill="x", pady=4)
+
+            lbl_name = tk.Label(item, text=p["nom"].upper(), font=("Segoe UI", 11, "bold"), bg=bg_item, fg=C["text_main"] if not is_active else C["accent"])
+            lbl_name.pack(side="left")
+
+            if is_active:
+                tk.Label(item, text="[ ACTIF ]", font=("Segoe UI", 8, "bold"), bg=bg_item, fg=C["accent"]).pack(side="left", padx=15)
+
+            badge_box = tk.Frame(item, bg=bg_item)
+            badge_box.pack(side="right")
+
+            for txt, c in [(f"MAX T°: {p['temp_max']}°C", C["info"]), (f"MIN SOL: {p['eau_min']}%", C["warning"])]:
+                b = tk.Frame(badge_box, bg=C["bg_main"], padx=8, pady=4, highlightthickness=1, highlightbackground=C["border"])
+                b.pack(side="left", padx=5)
+                tk.Label(b, text=txt, font=("Segoe UI", 8), bg=C["bg_main"], fg=C["text_main"]).pack()
+
+            if not is_active:
+                b_sel = tk.Button(badge_box, text="SUIVRE", command=lambda pl=p: self._select_plante(pl))
+                style_btn(b_sel, bg=C["border"], fg=C["text_main"])
+                b_sel.pack(side="left", padx=10)
+            
+            b_del = tk.Button(badge_box, text="X", command=lambda pl=p: self._suppr_plante(pl))
+            style_btn(b_del, bg=C["danger"], fg=C["text_main"])
+            b_del.pack(side="left", padx=5)
+
+    def _select_plante(self, p):
+        self.plante_active = p
+        self._render_plantes()
+        self._log("INFO", f"Plante sélectionnée : [{p['nom'].upper()}]")
+
+    def _suppr_plante(self, p):
+        if not messagebox.askyesno("Confirmation", f"Supprimer la plante '{p['nom']}' ?"): return
+        try:
+            conn = get_db(); cur = conn.cursor()
+            cur.execute("DELETE FROM plantes WHERE uid=%s AND nom=%s", (self.uid, p["nom"]))
+            conn.commit(); cur.close(); conn.close()
+            self.plantes = [x for x in self.plantes if x["nom"] != p["nom"]]
+            if self.plante_active and self.plante_active["nom"] == p["nom"]:
+                self.plante_active = self.plantes[0] if self.plantes else None
+            self._render_plantes()
+            self._log("WARN", f"Plante supprimée : '{p['nom']}'")
+        except Exception as e:
+            self._log("ERR", f"Erreur SQL : {e}")
+
+    def _popup_plante(self):
+        pop = tk.Toplevel(self)
+        pop.title("Configuration")
+        pop.configure(bg=C["bg_main"])
+        pop.geometry("380x420")
+        pop.resizable(False, False)
+        pop.grab_set()
+
+        tk.Label(pop, text="AJOUTER UNE NOUVELLE PLANTE", font=("Segoe UI", 12, "bold"), bg=C["bg_main"], fg=C["text_main"]).pack(pady=(25, 15))
+        
+        f_fields = tk.Frame(pop, bg=C["bg_card"], padx=20, pady=20, highlightthickness=1, highlightbackground=C["border"])
+        f_fields.pack(fill="both", expand=True, padx=25, pady=(0, 25))
+
+        fields = [("NOM DE LA PLANTE", "nom", ""), ("TEMPÉRATURE MAXIMALE (°C)", "t_max", "30"), ("HUMIDITÉ DU SOL MINIMALE (%)", "e_min", "40")]
+        entries = {}
+
+        for label, key, default in fields:
+            tk.Label(f_fields, text=label, font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(5,0))
+            e = tk.Entry(f_fields)
+            style_entry(e)
+            e.insert(0, default)
+            e.pack(fill="x", pady=(4, 12), ipady=6)
+            entries[key] = e
+
+        lbl_err = tk.Label(f_fields, text="", font=("Segoe UI", 9), bg=C["bg_card"], fg=C["danger"])
+        lbl_err.pack()
+
+        def valider():
+            nom = entries["nom"].get().strip()
+            if not nom: lbl_err.configure(text="Nom requis."); return
+            try:
+                tm = float(entries["t_max"].get())
+                em = float(entries["e_min"].get())
+            except: lbl_err.configure(text="Valeurs numériques incorrectes."); return
+
+            try:
+                conn = get_db(); cur = conn.cursor()
+                cur.execute("INSERT INTO plantes (uid,nom,temp_max,humidite_min,eau_min) VALUES (%s,%s,%s,%s,%s)", (self.uid, nom, tm, 0.0, em))
+                conn.commit(); cur.close(); conn.close()
+                self.plantes.append({"nom": nom, "temp_max": tm, "humidite_min": 0.0, "eau_min": em})
+                if not self.plante_active: self.plante_active = self.plantes[0]
+                self._render_plantes()
+                self._log("OK", f"Plante enregistrée : {nom}")
+                pop.destroy()
+            except Exception as ex:
+                lbl_err.configure(text=f"Erreur DB : {ex}")
+
+        btn_save = tk.Button(f_fields, text="ENREGISTRER", command=valider)
+        style_btn(btn_save)
+        btn_save.pack(fill="x", ipady=6, pady=(10, 0))
+
+    # --- ACTIONS DES TOGGLE SWITCH ANIMÉS ---
+    def _api_pompe(self, state):
+        self.pompe_on = state
+        self._log("OK" if state else "WARN", f"Manuel -> Pompe : {'ON' if state else 'OFF'}")
+        threading.Thread(target=lambda: db.child("commandes").child(self.uid).update({"pompe": state}), daemon=True).start()
+
+    def _api_ventilo(self, state):
+        self.ventilo_on = state
+        self._log("OK" if state else "WARN", f"Manuel -> Ventilation : {'ON' if state else 'OFF'}")
+        threading.Thread(target=lambda: db.child("commandes").child(self.uid).update({"ventilateur": state}), daemon=True).start()
+
+    def _rafraichir_donnees(self):
+        def tache():
+            try:
+                d = db.child("capteurs").child(self.uid).get().val()
+                if d:
+                    self.after(0, self._process_telemetrie, d)
+                else:
+                    self._log("WARN", "En attente des données du Raspberry Pi...")
+            except Exception as e:
+                self._log("ERR", f"Erreur liaison Cloud : {e}")
+            self.after(5000, self._rafraichir_donnees)
+        threading.Thread(target=tache, daemon=True).start()
+
+    def _process_telemetrie(self, data):
+        temp = data.get("temperature", 0.0)
+        hum = data.get("humidite_air", 0.0)
+        sol = data.get("humidite_sol", 0.0)
+        pluie = data.get("pluie", False)
+
+        for key, val in [("temp", temp), ("hum", hum), ("sol", sol)]:
+            lbl, bar, unit, _ = self._cards_widgets[key]
+            lbl.configure(text=f"{val} {unit}")
+            ratio = min(max(val / 100.0 if key != "temp" else val / 50.0, 0.0), 1.0)
+            bar.place(relwidth=ratio)
+            
+        lbl, bar, _, _ = self._cards_widgets["pluie"]
+        lbl.configure(text="OUI" if pluie else "NON", fg=C["info"] if pluie else C["text_main"])
+        bar.place(relwidth=1.0 if pluie else 0.05)
+
+        self._log("INFO", f"Données -> T°: {temp}°C | Sol: {sol}% | Pluie: {'Oui' if pluie else 'Non'}")
+
+        try:
+            conn = get_db(); cur = conn.cursor()
+            cur.execute("INSERT INTO capteurs (uid,temperature,humidite_air,humidite_sol,pluie) VALUES (%s,%s,%s,%s,%s)", (self.uid, temp, hum, sol, pluie))
+            conn.commit(); cur.close(); conn.close()
+        except Exception as e:
+            self._log("ERR", f"Erreur MariaDB : {e}")
+
+        # Automatisme intelligent et synchronisation des Toggles
+        if self.plante_active:
+            if sol < self.plante_active["eau_min"] and not self.pompe_on:
+                self._log("WARN", f"Sol sec ({sol}% < {self.plante_active['eau_min']}%). Pompe activée.")
+                self.pompe_on = True
+                self.toggle_pompe.set_state(True)
+                db.child("commandes").child(self.uid).update({"pompe": True})
+            elif sol >= self.plante_active["eau_min"] + 10 and self.pompe_on:
+                self._log("OK", f"Humidité sol OK ({sol}%). Pompe arrêtée.")
+                self.pompe_on = False
+                self.toggle_pompe.set_state(False)
+                db.child("commandes").child(self.uid).update({"pompe": False})
+
+            if temp > self.plante_active["temp_max"] and not self.ventilo_on:
+                self._log("WARN", f"Surchauffe ({temp}°C > {self.plante_active['temp_max']}°C). Ventilateur activé.")
+                self.ventilo_on = True
+                self.toggle_ventilo.set_state(True)
+                db.child("commandes").child(self.uid).update({"ventilateur": True})
+            elif temp <= self.plante_active["temp_max"] - 2 and self.ventilo_on:
+                self._log("OK", f"Température stabilisée ({temp}°C). Ventilateur arrêté.")
+                self.ventilo_on = False
+                self.toggle_ventilo.set_state(False)
+                db.child("commandes").child(self.uid).update({"ventilateur": False})
+
+    def _log(self, level, msg):
+        self.after(0, self._log_ui, level, msg)
+
+    def _log_ui(self, level, msg):
+        self.console.configure(state="normal")
+        ts = time.strftime("%H:%M:%S")
+        self.console.insert("end", f"[{ts}] ", "TEXT_MUTED")
+        self.console.insert("end", f"[{level}] ", level)
+        self.console.insert("end", f"{msg}\n")
+        self.console.configure(state="disabled")
+        self.console.see("end")
+
+    def _clear_console(self):
+        self.console.configure(state="normal")
+        self.console.delete("1.0", "end")
+        self.console.configure(state="disabled")
+
+# --- APPLICATION MASTER ---
+class App:
+    def __init__(self):
+        self.fen = tk.Tk()
+        self.fen.title("Serre Connectée Management System")
+        self.fen.geometry("1080x840")  # Hauteur légèrement augmentée pour le grand tableau de statistiques
+        self.fen.configure(bg=C["bg_main"])
+        self.fen.resizable(False, False)
+        
+        init_db()
+        self.page = None
+        self._connexion()
+
+    def _connexion(self):
+        if self.page: self.page.destroy()
+        self.page = PageConnexion(self.fen, self._dashboard)
+        self.page.pack(fill="both", expand=True)
+
+    def _dashboard(self, uid, email):
+        if self.page: self.page.destroy()
+        self.page = PageDashboard(self.fen, uid, email, self._connexion)
+        self.page.pack(fill="both", expand=True)
+
+    def run(self):
+        self.fen.mainloop()
+
+if __name__ == "__main__":
+    App().run()
