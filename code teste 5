@@ -32,14 +32,15 @@ C = {
     "danger":       "#EF4444",  
     "warning":      "#F59E0B",  
     "border":       "#334155",
-    "console_bg":   "#020617"
+    "console_bg":   "#020617",
+    "info":         "#38BDF8"
 }
 
-# --- COMPOSANT : ANNEAU DE PROGRESSION CIRCULAIRE (AGRANDI & CORRIGÉ) ---
+# --- COMPOSANT : ANNEAU DE PROGRESSION CIRCULAIRE (VÉRITABLE VERSION GÉANTE) ---
 class CircularProgress(tk.Canvas):
     def __init__(self, parent, label="Capteur", unit="", max_val=100, color="#3B82F6"):
-        # Augmentation de la taille globale du Canvas à 160x160 pour des cercles plus grands
-        super().__init__(parent, width=160, height=160, bg=C["bg_card"], bd=0, highlightthickness=0)
+        # Augmentation de la taille globale du canvas pour accueillir l'anneau géant
+        super().__init__(parent, width=200, height=220, bg=C["bg_card"], bd=0, highlightthickness=0)
         self.label = label
         self.unit = unit
         self.max_val = max_val
@@ -49,21 +50,25 @@ class CircularProgress(tk.Canvas):
 
     def _draw(self):
         self.delete("all")
-        # Arc de fond plus grand (coordonnées adaptées pour un cercle plus large et centré)
-        self.create_arc(15, 15, 145, 145, start=0, extent=359, outline="#334155", width=9, style="arc")
         
-        # Arc de progression
+        # Coordonnées d'une boîte englobante de 160x160 pixels pour un anneau massif
+        # x1, y1, x2, y2
+        bbox = (20, 20, 180, 180)
+        
+        # Arc de fond (gris foncé)
+        self.create_arc(bbox, start=0, extent=359, outline="#334155", width=14, style="arc")
+        
+        # Arc de progression dynamique
         extent_angle = -(self.value / self.max_val) * 360 if self.max_val > 0 else 0
         if extent_angle < -360: extent_angle = -360
         if extent_angle != 0:
-            self.create_arc(15, 15, 145, 145, start=90, extent=extent_angle, outline=self.color, width=9, style="arc")
+            self.create_arc(bbox, start=90, extent=extent_angle, outline=self.color, width=14, style="arc")
         
-        # Valeur numérique au centre (ex: 24.5 °C)
-        self.create_text(80, 70, text=f"{self.value}{self.unit}", fill=C["text_main"], font=("Segoe UI", 13, "bold"))
+        # Valeur numérique centrale (grosse taille)
+        self.create_text(100, 100, text=f"{self.value}{self.unit}", fill=C["text_main"], font=("Segoe UI", 16, "bold"))
         
-        # Label sur UNE SEULE LIGNE (élargi à width=160 pour ne plus jamais couper ou aller à la ligne)
-        self.create_text(80, 112, text=self.label, fill=C["text_muted"], 
-                         font=("Segoe UI", 7, "bold"), justify="center", width=160)
+        # Label sous l'anneau, parfaitement centré sur une ligne sans retour automatique
+        self.create_text(100, 205, text=self.label, fill=C["text_muted"], font=("Segoe UI", 8, "bold"), justify="center")
 
     def set_value(self, val):
         self.value = val
@@ -209,8 +214,7 @@ class PageConnexion(tk.Frame):
         
         def tache():
             try:
-                if self.mode == "connexion": user = auth.sign_in_with_email_and_password(email, mdp)
-                else: user = auth.create_user_with_email_and_password(email, mdp)
+                user = auth.sign_in_with_email_and_password(email, mdp) if self.mode == "connexion" else auth.create_user_with_email_and_password(email, mdp)
                 self.after(0, lambda: self.on_conn(user["localId"], email))
             except Exception as e:
                 self.after(0, lambda: self.lbl_msg.configure(text="Échec de l'opération."))
@@ -271,31 +275,32 @@ class PageDashboard(tk.Frame):
         upper_grid = tk.Frame(main_box, bg=C["bg_main"])
         upper_grid.pack(fill="x", pady=(0, 15))
 
-        # --- BLOC 1 : CAPTEURS (ALIGNEMENT PARFAIT EN LIGNE AVEC DES CERCLES PLUS GRANDS) ---
+        # --- BLOC 1 : CAPTEURS (ANNEAUX ENFIN VRAIMENT GEANTS) ---
         f_caps = tk.Frame(upper_grid, bg=C["bg_card"], padx=15, pady=15, highlightthickness=1, highlightbackground=C["border"])
         f_caps.pack(side="left", fill="both", expand=True, padx=(0, 10))
-        tk.Label(f_caps, text="DONNÉES EN TEMPS RÉEL", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 10))
+        tk.Label(f_caps, text="DONNÉES EN TEMPS RÉEL", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 5))
         
         ring_box = tk.Frame(f_caps, bg=C["bg_card"])
         ring_box.pack(fill="both", expand=True, pady=5)
 
+        # Les 3 cercles géants réels (largeur 200)
         self.c_temp = CircularProgress(ring_box, "TEMPÉRATURE ATMOSPHÈRE", " °C", 50, C["brand"])
-        self.c_temp.pack(side="left", padx=8, expand=True, anchor="center")
+        self.c_temp.pack(side="left", padx=5, expand=True)
         
         self.c_hum = CircularProgress(ring_box, "HUMIDITÉ DE L'AIR", " %", 100, C["success"])
-        self.c_hum.pack(side="left", padx=8, expand=True, anchor="center")
+        self.c_hum.pack(side="left", padx=5, expand=True)
         
-        self.c_sol = CircularProgress(ring_box, "HUMIDITE SOL", " %", 100, C["warning"])
-        self.c_sol.pack(side="left", padx=8, expand=True, anchor="center")
+        self.c_sol = CircularProgress(ring_box, "HYDROMÉTRIE DU SOL", " %", 100, C["warning"])
+        self.c_sol.pack(side="left", padx=5, expand=True)
         
-        # Bloc État de la Pluie redimensionné à 130x130 pour s'aligner parfaitement en hauteur avec les grands cercles
-        self.f_pluie_status = tk.Frame(ring_box, bg=C["bg_input"], width=130, height=130, highlightthickness=1, highlightbackground=C["border"])
-        self.f_pluie_status.pack(side="left", padx=12, expand=True, anchor="center")
+        # Bloc État de la Pluie harmonisé à 160x160 pour s'aligner au millimètre avec la boîte des cercles
+        self.f_pluie_status = tk.Frame(ring_box, bg=C["bg_input"], width=160, height=160, highlightthickness=1, highlightbackground=C["border"])
+        self.f_pluie_status.pack(side="left", padx=15, expand=True)
         self.f_pluie_status.pack_propagate(False)
         
-        self.lbl_pluie_val = tk.Label(self.f_pluie_status, text="NON", font=("Segoe UI", 16, "bold"), bg=C["bg_input"], fg=C["text_main"])
+        self.lbl_pluie_val = tk.Label(self.f_pluie_status, text="NON ☀", font=("Segoe UI", 20, "bold"), bg=C["bg_input"], fg=C["success"])
         self.lbl_pluie_val.pack(expand=True, pady=(25, 0))
-        tk.Label(self.f_pluie_status, text="ÉTAT PLUIE", font=("Segoe UI", 8, "bold"), bg=C["bg_input"], fg=C["text_muted"]).pack(expand=True, pady=(0, 25))
+        tk.Label(self.f_pluie_status, text="STATUT PLUVIOMÉTRIE", font=("Segoe UI", 8, "bold"), bg=C["bg_input"], fg=C["text_muted"]).pack(expand=True, pady=(0, 25))
 
         # --- BLOC 2 : RELAIS ---
         f_act = tk.Frame(upper_grid, bg=C["bg_card"], width=320, padx=20, pady=15, highlightthickness=1, highlightbackground=C["border"])
@@ -354,7 +359,7 @@ class PageDashboard(tk.Frame):
         self.console = tk.Text(f_console, bg=C["console_bg"], fg=C["text_main"], font=("Consolas", 9), relief="flat", bd=0, state="disabled", wrap="char")
         self.console.pack(fill="both", expand=True)
         
-        self.console.tag_configure("INFO", foreground=C["brand"])
+        self.console.tag_configure("INFO", foreground=C["info"])
         self.console.tag_configure("OK", foreground=C["success"])
         self.console.tag_configure("WARN", foreground=C["warning"])
         self.console.tag_configure("ERR", foreground=C["danger"])
@@ -459,14 +464,12 @@ class PageDashboard(tk.Frame):
         self.pompe_on = state
         status_text = "POMPE ON" if state else "POMPE OFF"
         self._log("OK" if state else "WARN", f"Relais Pompe -> {status_text}")
-        
         if manuel:
             threading.Thread(target=lambda: db.child("commandes").child(self.uid).update({"pompe": state}), daemon=True).start()
 
     def _api_ventilo(self, state, manuel=False):
         self.ventilo_on = state
         self._log("OK" if state else "WARN", f"Relais Ventilateur -> {'ACTIF' if state else 'INACTIF'}")
-        
         if manuel:
             threading.Thread(target=lambda: db.child("commandes").child(self.uid).update({"ventilateur": state}), daemon=True).start()
 
@@ -503,7 +506,6 @@ class PageDashboard(tk.Frame):
         except: pass
 
         if self.plante_active:
-            # Vérification Pompe
             if s < self.plante_active["eau_min"]:
                 if not self.pompe_on:
                     self.toggle_pompe.set_state(True)
@@ -514,7 +516,6 @@ class PageDashboard(tk.Frame):
                     self.toggle_pompe.set_state(False)
                     self._api_pompe(False, manuel=True)
 
-            # Vérification Ventilateur
             if t > self.plante_active["temp_max"]:
                 if not self.ventilo_on:
                     self.toggle_ventilo.set_state(True)
@@ -547,7 +548,7 @@ class App:
     def __init__(self):
         self.fen = tk.Tk()
         self.fen.title("EcoSphere OS")
-        self.fen.geometry("1120x820") # Fenêtre légèrement élargie pour accueillir la nouvelle disposition
+        self.fen.geometry("1240x880") # Fenêtre subtilement augmentée pour donner de l'air aux anneaux géants
         self.fen.configure(bg=C["bg_main"])
         self.fen.resizable(False, False)
         init_db()
