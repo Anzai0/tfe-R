@@ -237,7 +237,6 @@ class PageDashboard(tk.Frame):
         style = ttk.Style()
         style.theme_use("default")
         
-        # VISIBILITÉ DU TABLEAU MAXIMALE : Texte blanc pur sur fond sombre contrasté
         style.configure("Treeview", 
                         background="#0B111E", 
                         foreground="#FFFFFF",            
@@ -251,7 +250,6 @@ class PageDashboard(tk.Frame):
                   background=[("selected", C["bg_input"])], 
                   foreground=[("selected", C["accent"])])
         
-        # En-têtes ultra-visibles
         style.configure("Treeview.Heading", 
                         background="#1A263F",     
                         foreground="#00E676",     
@@ -343,7 +341,7 @@ class PageDashboard(tk.Frame):
         self.plant_section.pack(fill="x", pady=(0, 15))
         self._render_plantes()
 
-        # --- TABLEAU DE STATISTIQUES RE-STYLISÉ ---
+        # Tableau des Statistiques
         stats_frame = tk.Frame(col_gauche, bg=C["bg_card"], highlightthickness=1, highlightbackground=C["border"], padx=20, pady=15)
         stats_frame.pack(fill="both", expand=True)
 
@@ -352,7 +350,6 @@ class PageDashboard(tk.Frame):
         self.table_stats = ttk.Treeview(stats_frame, columns=("date", "t", "ha", "hs", "p"), show="headings", selectmode="none")
         self.table_stats.pack(fill="both", expand=True)
         
-        # Changement d'intitulé : Uniquement "Date"
         self.table_stats.heading("date", text="Date")
         self.table_stats.heading("t", text="Température")
         self.table_stats.heading("ha", text="Hum. Air")
@@ -365,11 +362,10 @@ class PageDashboard(tk.Frame):
         self.table_stats.column("hs", width=90, anchor="center")
         self.table_stats.column("p", width=80, anchor="center")
 
-        # Alternance de lignes avec fort contraste (Gris sombre et Bleu nuit profond) pour forcer la visibilité
         self.table_stats.tag_configure("pair", background="#121A2E", foreground="#FFFFFF")
         self.table_stats.tag_configure("impair", background="#0A0F1C", foreground="#FFFFFF")
 
-        # --- COLONNE DE DROITE (CONSOLE SANS CHANGEMENTS STRUCTURELS) ---
+        # --- COLONNE DE DROITE (CONSOLE AVEC RETOURS INTELLIGENTS) ---
         col_droite = tk.Frame(workspace, bg=C["bg_card"], width=320, highlightthickness=1, highlightbackground=C["border"], padx=15, pady=15)
         col_droite.pack(side="right", fill="both")
         col_droite.pack_propagate(False)
@@ -379,14 +375,15 @@ class PageDashboard(tk.Frame):
         c_wrapper = tk.Frame(col_droite, bg=C["console_bg"], pady=5, padx=5, highlightthickness=1, highlightbackground=C["border"])
         c_wrapper.pack(fill="both", expand=True, pady=10)
 
-        # OPTIMISATION LOG : wrap="none" et police ajustée pour tout garder proprement aligné en une ligne
-        self.console = tk.Text(c_wrapper, bg=C["console_bg"], fg=C["text_main"], font=("Consolas", 8), relief="flat", bd=0, state="disabled", wrap="none")
+        # CONFIGURATION EN WRAP="WORD" AVEC RE-INDENTATION DES LIGNES SECONDAIRES
+        self.console = tk.Text(c_wrapper, bg=C["console_bg"], fg=C["text_main"], font=("Consolas", 8.5), relief="flat", bd=0, state="disabled", wrap="word")
         self.console.pack(fill="both", expand=True)
 
-        self.console.tag_configure("INFO", foreground=C["info"])
-        self.console.tag_configure("OK", foreground=C["accent"])
-        self.console.tag_configure("WARN", foreground=C["warning"])
-        self.console.tag_configure("ERR", foreground=C["danger"])
+        # Application de tags de couleurs et de mise en page (lstyle indente le texte qui dépasse à la ligne)
+        self.console.tag_configure("INFO", foreground=C["info"], lmargin2=15)
+        self.console.tag_configure("OK", foreground=C["accent"], lmargin2=15)
+        self.console.tag_configure("WARN", foreground=C["warning"], lmargin2=15)
+        self.console.tag_configure("ERR", foreground=C["danger"], lmargin2=15)
         self.console.tag_configure("TEXT_MUTED", foreground=C["text_muted"])
 
         btn_clear = tk.Button(col_droite, text="EFFACER LE LOG", command=self._clear_console)
@@ -610,8 +607,8 @@ class PageDashboard(tk.Frame):
         self.console.configure(state="normal")
         ts = time.strftime("%H:%M:%S")
         self.console.insert("end", f"[{ts}] ", "TEXT_MUTED")
-        self.console.insert("end", f"[{level}] ", level)
-        self.console.insert("end", f"{msg}\n")
+        # Ajout du tag 'level' qui applique automatiquement le lmargin2 pour les lignes coupées
+        self.console.insert("end", f"[{level}] {msg}\n", level)
         self.console.configure(state="disabled")
         self.console.see("end")
 
