@@ -84,7 +84,7 @@ class PageConnexion(tk.Frame):
         self.lbl_title = tk.Label(container, text="Connexion", font=("Segoe UI", 24, "bold"), bg=C["bg_card"], fg=C["text_main"])
         self.lbl_title.pack(anchor="w", pady=(0, 5))
         
-        self.lbl_subtitle = tk.Label(container, text="Gestion de Serre Intelligente IoT", font=("Segoe UI", 10), bg=C["bg_card"], fg=C["text_muted"])
+        self.lbl_subtitle = tk.Label(container, text="SERRE CONNECTÉE", font=("Segoe UI", 10, "bold"), bg=C["bg_card"], fg=C["text_muted"])
         self.lbl_subtitle.pack(anchor="w", pady=(0, 25))
 
         # Champs Email
@@ -193,7 +193,7 @@ class PageDashboard(tk.Frame):
         
         btn_dc = tk.Button(navbar, text="Déconnexion", command=self.on_deconn, padx=15)
         style_btn(btn_dc, bg=C["danger"], fg=C["text_main"])
-        btn_dc.pack(side="right", padx=20, cyview=None)
+        btn_dc.pack(side="right", padx=20)
 
         tk.Label(navbar, text=f"Connecté : {self.email}", font=("Segoe UI", 10), bg=C["bg_card"], fg=C["text_muted"]).pack(side="right", padx=10)
 
@@ -201,9 +201,9 @@ class PageDashboard(tk.Frame):
         workspace = tk.Frame(self, bg=C["bg_main"])
         workspace.pack(fill="both", expand=True, padx=20, pady=20)
 
-        # Colonne Gauche (Contrôles et Télémétrie) - 70% largeur
+        # Colonne Gauche (Contrôles et Télémétrie) - Corrigé avec padx tuple
         col_gauche = tk.Frame(workspace, bg=C["bg_main"])
-        col_gauche.pack(side="left", fill="both", expand=True, marginRight=10)
+        col_gauche.pack(side="left", fill="both", expand=True, padx=(0, 10))
 
         # Grille des Capteurs (4 cartes modernes)
         grid_capteurs = tk.Frame(col_gauche, bg=C["bg_main"])
@@ -234,13 +234,12 @@ class PageDashboard(tk.Frame):
 
             self._cards_widgets[key] = (lbl_val, p_bar, unit, color)
 
-        # Zone Actionneurs Réinventée
+        # Zone Actionneurs
         act_frame = tk.Frame(col_gauche, bg=C["bg_card"], highlightthickness=1, highlightbackground=C["border"], padx=20, pady=20)
         act_frame.pack(fill="x", pady=(0, 15))
         
         tk.Label(act_frame, text="CONTRÔLE DES ACTIONNEURS", font=("Segoe UI", 10, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0,15))
         
-        # Flexbox pour boutons d'actionneurs
         btn_box = tk.Frame(act_frame, bg=C["bg_card"])
         btn_box.pack(fill="x")
 
@@ -265,7 +264,7 @@ class PageDashboard(tk.Frame):
         self.plant_section.pack(fill="both", expand=True)
         self._render_plantes()
 
-        # Colonne Droite (Console Système Haute Résolution) - 30% largeur
+        # Colonne Droite (Console Système)
         col_droite = tk.Frame(workspace, bg=C["bg_card"], width=320, highlightthickness=1, highlightbackground=C["border"], padx=15, pady=15)
         col_droite.pack(side="right", fill="both", padx=(15, 0))
         col_droite.pack_propagate(False)
@@ -297,9 +296,9 @@ class PageDashboard(tk.Frame):
         tk.Label(top_bar, text=f"CONFIGURATIONS CYBLES ({len(self.plantes)}/3)", font=("Segoe UI", 10, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(side="left")
         
         if len(self.plantes) < 3:
-            btn_add = tk.Button(top_bar, text="+ Ajouter une cible", command=self._popup_plante, px=10)
+            btn_add = tk.Button(top_bar, text="+ Ajouter une cible", command=self._popup_plante)
             style_btn(btn_add, bg=C["accent"], fg=C["bg_main"])
-            btn_add.pack(side="right")
+            btn_add.pack(side="right", padx=10)
 
         if not self.plantes:
             tk.Label(self.plant_section, text="Aucun profil enregistré. Automatisation inactive.", font=("Segoe UI", 10, "italic"), bg=C["bg_card"], fg=C["text_muted"]).pack(pady=30)
@@ -319,7 +318,6 @@ class PageDashboard(tk.Frame):
             if is_active:
                 tk.Label(item, text="[PROFIL SURVEILLÉ]", font=("Segoe UI", 8, "bold"), bg=bg_item, fg=C["accent"]).pack(side="left", padx=10)
 
-            # Conteneurs de badges de données
             badge_box = tk.Frame(item, bg=bg_item)
             badge_box.pack(side="right")
 
@@ -407,7 +405,6 @@ class PageDashboard(tk.Frame):
         style_btn(btn_save)
         btn_save.pack(fill="x", ipady=5, pady=(10, 0))
 
-    # --- TRANSMISSION TEMPS RÉEL (VERS LE RASPBERRY PI VIA FIREBASE) ---
     def _tog_pompe(self):
         self.pompe_on = not self.pompe_on
         self._update_button_ui(self.btn_pompe, self.pompe_on)
@@ -426,7 +423,6 @@ class PageDashboard(tk.Frame):
         else:
             btn.configure(text="ACTIVER", bg=C["border"], fg=C["text_main"], activebackground=C["accent"])
 
-    # --- MOTEUR D'AUTOMATISATION ET DE TRAITEMENT DES FLUX ---
     def _rafraichir_donnees(self):
         def tache():
             try:
@@ -446,21 +442,18 @@ class PageDashboard(tk.Frame):
         sol = data.get("humidite_sol", 0.0)
         pluie = data.get("pluie", False)
 
-        # 1. Mise à jour Interface Graphique des Cartes
         for key, val in [("temp", temp), ("hum", hum), ("sol", sol)]:
             lbl, bar, unit, _ = self._cards_widgets[key]
             lbl.configure(text=f"{val} {unit}")
             ratio = min(max(val / 100.0 if key != "temp" else val / 50.0, 0.0), 1.0)
             bar.place(relwidth=ratio)
             
-        # Cas spécial capteur binaire Pluie
         lbl, bar, _, _ = self._cards_widgets["pluie"]
         lbl.configure(text="DÉTECTÉE" if pluie else "AUCUNE", fg=C["info"] if pluie else C["text_main"])
         bar.place(relwidth=1.0 if pluie else 0.05)
 
         self._log("INFO", f"Télémétrie reçue -> Air: {temp}°C | Hum: {hum}% | Sol: {sol}% | Pluie: {'Oui' if pluie else 'Non'}")
 
-        # 2. Sauvegarde dans l'Historique local (MariaDB)
         try:
             conn = get_db(); cur = conn.cursor()
             cur.execute("INSERT INTO capteurs (uid,temperature,humidite_air,humidite_sol,pluie) VALUES (%s,%s,%s,%s,%s)", (self.uid, temp, hum, sol, pluie))
@@ -468,21 +461,18 @@ class PageDashboard(tk.Frame):
         except Exception as e:
             self._log("ERR", f"Historisation locale échouée (MariaDB) : {e}")
 
-        # 3. Système d'IA / Régulation automatique des Seuils de la Plante active
         if self.plante_active:
-            # Vérification Humidité du sol -> Gestion automatique Pompe
             if sol < self.plante_active["eau_min"] and not self.pompe_on:
                 self._log("WARN", f"Seuil critique franchi ! Humidité sol ({sol}%) < Objectif ({self.plante_active['eau_min']}%). Activation automatique de la pompe.")
                 self.pompe_on = True
                 self._update_button_ui(self.btn_pompe, True)
                 db.child("commandes").child(self.uid).update({"pompe": True})
-            elif sol >= self.plante_active["eau_min"] + 10 and self.pompe_on: # +10 marge d'arrêt pour éviter les micro-coupures
+            elif sol >= self.plante_active["eau_min"] + 10 and self.pompe_on:
                 self._log("OK", f"Niveau d'eau optimal rétabli ({sol}%). Extinction automatique de la pompe.")
                 self.pompe_on = False
                 self._update_button_ui(self.btn_pompe, False)
                 db.child("commandes").child(self.uid).update({"pompe": False})
 
-            # Vérification Température -> Gestion automatique Ventilateur
             if temp > self.plante_active["temp_max"] and not self.ventilo_on:
                 self._log("WARN", f"Surchauffe détectée ! Température ({temp}°C) > Max autorisé ({self.plante_active['temp_max']}°C). Démarrage du système de refroidissement.")
                 self.ventilo_on = True
@@ -517,9 +507,9 @@ class App:
     def __init__(self):
         self.fen = tk.Tk()
         self.fen.title("Greenhouse Management System OS")
-        self.fen.geometry("1020://localhost" if False else "1050x760")
+        self.fen.geometry("1050x760")
         self.fen.configure(bg=C["bg_main"])
-        self.fen.resizable(True, True)
+        self.fen.resizable(False, False)
         
         init_db()
         self.page = None
