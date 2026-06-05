@@ -59,7 +59,7 @@ def init_db():
 # --- STYLISATION DES COMPOSANTS ---
 def style_entry(e):
     e.configure(bg=C["bg_input"], fg=C["text_main"], insertbackground=C["accent"],
-                relief="flat", bd=0, font=("Consolas", 11),
+                relief="flat", bd=0, font=("Segoe UI", 11),
                 highlightthickness=1, highlightbackground=C["border"],
                 highlightcolor=C["accent"])
 
@@ -69,7 +69,7 @@ def style_btn(b, bg=None, fg=None):
                 cursor="hand2", activebackground=C["accent"],
                 activeforeground=C["bg_main"])
 
-# --- VUE 1 : CONNEXION ET INSCRIPTION RE-STYLISÉE ---
+# --- VUE 1 : CONNEXION ET INSCRIPTION RESTAURÉE ---
 class PageConnexion(tk.Frame):
     def __init__(self, parent, on_conn):
         super().__init__(parent, bg=C["bg_main"])
@@ -78,66 +78,61 @@ class PageConnexion(tk.Frame):
         self._build()
 
     def _build(self):
-        # Grand conteneur central effet "bunker cyber"
-        container = tk.Frame(self, bg=C["bg_card"], padx=45, pady=45, highlightthickness=2, highlightbackground=C["border"])
-        container.place(relx=0.5, rely=0.5, anchor="center", width=440)
+        container = tk.Frame(self, bg=C["bg_card"], padx=40, pady=40, highlightthickness=1, highlightbackground=C["border"])
+        container.place(relx=0.5, rely=0.5, anchor="center", width=420)
 
-        # Badge "SYSTEM"
-        badge = tk.Label(container, text="✦ SECURE PROTOCOL", font=("Consolas", 8, "bold"), bg=C["border"], fg=C["accent"], padx=8, pady=3)
-        badge.pack(anchor="w", pady=(0, 15))
-
-        self.lbl_title = tk.Label(container, text="CONNEXION", font=("Segoe UI", 26, "bold"), bg=C["bg_card"], fg=C["text_main"])
-        self.lbl_title.pack(anchor="w", pady=(0, 2))
+        self.lbl_title = tk.Label(container, text="Connexion", font=("Segoe UI", 24, "bold"), bg=C["bg_card"], fg=C["text_main"])
+        self.lbl_title.pack(anchor="w", pady=(0, 5))
         
-        self.lbl_subtitle = tk.Label(container, text="SERRE CONNECTÉE", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_muted"])
-        self.lbl_subtitle.pack(anchor="w", pady=(0, 30))
+        self.lbl_subtitle = tk.Label(container, text="SERRE CONNECTÉE", font=("Segoe UI", 10, "bold"), bg=C["bg_card"], fg=C["text_muted"])
+        self.lbl_subtitle.pack(anchor="w", pady=(0, 25))
 
-        # Champ Email
-        tk.Label(container, text="IDENTIFIANT EMAIL", font=("Consolas", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w")
+        # Champs Email
+        tk.Label(container, text="ADRESSE EMAIL", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w")
         self.e_email = tk.Entry(container)
         style_entry(self.e_email)
-        self.e_email.pack(fill="x", pady=(5, 20), ipady=10)
+        self.e_email.pack(fill="x", pady=(5, 15), ipady=8)
 
-        # Champ Mot de passe
-        tk.Label(container, text="CLEF DE SÉCURITÉ (PASSWORD)", font=("Consolas", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w")
+        # Champs Mot de passe
+        tk.Label(container, text="MOT DE PASSE", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w")
         self.e_mdp = tk.Entry(container, show="*")
         style_entry(self.e_mdp)
-        self.e_mdp.pack(fill="x", pady=(5, 25), ipady=10)
+        self.e_mdp.pack(fill="x", pady=(5, 20), ipady=8)
 
-        # Bouton Soumettre
-        self.btn_submit = tk.Button(container, text="INITIALISER LA SESSION", command=self._action)
+        # Bouton Principal
+        self.btn_submit = tk.Button(container, text="Se connecter", command=self._action)
         style_btn(self.btn_submit)
-        self.btn_submit.pack(fill="x", ipady=8, pady=(0, 20))
+        self.btn_submit.pack(fill="x", ipady=6, pady=(0, 15))
 
         # Switch Mode Toggle
-        self.btn_switch = tk.Button(container, text="[ Créer un nouveau compte d'accès ]", bg=C["bg_card"], fg=C["info"], 
-                                    bd=0, font=("Consolas", 9), cursor="hand2", activebackground=C["bg_card"], activeforeground=C["text_main"])
+        self.btn_switch = tk.Button(container, text="Pas de compte ? Créer un compte", bg=C["bg_card"], fg=C["info"], 
+                                    bd=0, font=("Segoe UI", 9, "underline"), cursor="hand2", activebackground=C["bg_card"], activeforeground=C["text_main"])
         self.btn_switch.configure(command=self._toggle_mode)
         self.btn_switch.pack()
 
         self.lbl_msg = tk.Label(container, text="", font=("Segoe UI", 9), bg=C["bg_card"], fg=C["danger"])
-        self.lbl_msg.pack(pady=(15, 0))
+        self.lbl_msg.pack(pady=(10, 0))
 
     def _toggle_mode(self):
         if self.mode == "connexion":
             self.mode = "inscription"
-            self.lbl_title.configure(text="INSCRIPTION")
-            self.btn_submit.configure(text="CRÉER LE COMPTE SYS")
-            self.btn_switch.configure(text="[ Retour à l'écran d'authentification ]")
+            self.lbl_title.configure(text="Inscription")
+            self.btn_submit.configure(text="Créer mon compte")
+            self.btn_switch.configure(text="Déjà inscrit ? Se connecter")
         else:
             self.mode = "connexion"
-            self.lbl_title.configure(text="CONNEXION")
-            self.btn_submit.configure(text="INITIALISER LA SESSION")
-            self.btn_switch.configure(text="[ Créer un nouveau compte d'accès ]")
+            self.lbl_title.configure(text="Connexion")
+            self.btn_submit.configure(text="Se connecter")
+            self.btn_switch.configure(text="Pas de compte ? Créer un compte")
 
     def _action(self):
         email = self.e_email.get().strip()
         mdp = self.e_mdp.get().strip()
         if not email or not mdp:
-            self.lbl_msg.configure(text="Erreur : Tous les secteurs d'information requis sont vides.")
+            self.lbl_msg.configure(text="Veuillez remplir tous les champs.")
             return
         
-        self.btn_submit.configure(state="disabled", text="REQUÊTE EN COURS...")
+        self.btn_submit.configure(state="disabled", text="Chargement...")
         
         def tache():
             try:
@@ -149,20 +144,20 @@ class PageConnexion(tk.Frame):
                 self.after(0, lambda: self.on_conn(uid, email))
             except Exception as e:
                 s = str(e)
-                msg = "Échec d'authentification réseau."
-                if "EMAIL_EXISTS" in s: msg = "Cet email possède déjà un accès."
-                elif "WEAK_PASSWORD" in s: msg = "Sécurité trop faible (6 caractères min)."
-                elif "INVALID_EMAIL" in s: msg = "Structure d'adresse email invalide."
-                elif "EMAIL_NOT_FOUND" in s or "INVALID_PASSWORD" in s: msg = "Identifiants rejetés par la base cloud."
+                msg = "Erreur d'authentification"
+                if "EMAIL_EXISTS" in s: msg = "Cet email est déjà utilisé"
+                elif "WEAK_PASSWORD" in s: msg = "Mot de passe trop court (6 car. min)"
+                elif "INVALID_EMAIL" in s: msg = "Format d'email invalide"
+                elif "EMAIL_NOT_FOUND" in s or "INVALID_PASSWORD" in s: msg = "Identifiants incorrects"
                 
                 self.after(0, lambda: [
                     self.lbl_msg.configure(text=msg),
-                    self.btn_submit.configure(state="normal", text="INITIALISER LA SESSION" if self.mode == "connexion" else "CRÉER LE COMPTE SYS")
+                    self.btn_submit.configure(state="normal", text="Se connecter" if self.mode == "connexion" else "Créer mon compte")
                 ])
         threading.Thread(target=tache, daemon=True).start()
 
 
-# --- VUE 2 : DASHBOARD PRO RE-STYLISÉ ---
+# --- VUE 2 : DASHBOARD MAGNIFIQUE GARDE TEL QUEL ---
 class PageDashboard(tk.Frame):
     def __init__(self, parent, uid, email, on_deconn):
         super().__init__(parent, bg=C["bg_main"])
@@ -269,7 +264,7 @@ class PageDashboard(tk.Frame):
         self.plant_section.pack(fill="both", expand=True)
         self._render_plantes()
 
-        # Colonne Droite (Console Système Haute Résolution)
+        # Colonne Droite (Console Système)
         col_droite = tk.Frame(workspace, bg=C["bg_card"], width=340, highlightthickness=1, highlightbackground=C["border"], padx=15, pady=15)
         col_droite.pack(side="right", fill="both")
         col_droite.pack_propagate(False)
@@ -282,7 +277,6 @@ class PageDashboard(tk.Frame):
         self.console = tk.Text(c_wrapper, bg=C["console_bg"], fg=C["text_main"], font=("Consolas", 9), relief="flat", bd=0, state="disabled", wrap="word")
         self.console.pack(fill="both", expand=True)
 
-        # CORRECTION MAJEURE ICI : Remplacement de "fg" par "foreground" pour éviter le plantage TclError
         self.console.tag_configure("INFO", foreground=C["info"])
         self.console.tag_configure("OK", foreground=C["accent"])
         self.console.tag_configure("WARN", foreground=C["warning"])
@@ -516,7 +510,7 @@ class App:
     def __init__(self):
         self.fen = tk.Tk()
         self.fen.title("Greenhouse Core Management System OS")
-        self.fen.geometry("1060://localhost" if False else "1080x780")
+        self.fen.geometry("1080x780")
         self.fen.configure(bg=C["bg_main"])
         self.fen.resizable(False, False)
         
