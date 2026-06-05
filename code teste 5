@@ -38,7 +38,8 @@ C = {
 # --- COMPOSANT : ANNEAU DE PROGRESSION CIRCULAIRE ---
 class CircularProgress(tk.Canvas):
     def __init__(self, parent, label="Capteur", unit="", max_val=100, color="#3B82F6"):
-        super().__init__(parent, width=120, height=120, bg=C["bg_card"], bd=0, highlightthickness=0)
+        # Augmentation légère de la zone pour éviter que les labels longs se fassent couper
+        super().__init__(parent, width=130, height=130, bg=C["bg_card"], bd=0, highlightthickness=0)
         self.label = label
         self.unit = unit
         self.max_val = max_val
@@ -48,21 +49,27 @@ class CircularProgress(tk.Canvas):
 
     def _draw(self):
         self.delete("all")
-        self.create_arc(12, 12, 108, 108, start=0, extent=359, outline="#334155", width=7, style="arc")
+        # Arc de fond
+        self.create_arc(15, 15, 115, 115, start=0, extent=359, outline="#334155", width=8, style="arc")
+        
+        # Arc de progression
         extent_angle = -(self.value / self.max_val) * 360 if self.max_val > 0 else 0
         if extent_angle < -360: extent_angle = -360
         if extent_angle != 0:
-            self.create_arc(12, 12, 108, 108, start=90, extent=extent_angle, outline=self.color, width=7, style="arc")
-        self.create_text(60, 50, text=f"{self.value}{self.unit}", fill=C["text_main"], font=("Segoe UI", 13, "bold"))
-        self.create_text(60, 75, text=self.label, fill=C["text_muted"], font=("Segoe UI", 7, "bold"))
+            self.create_arc(15, 15, 115, 115, start=90, extent=extent_angle, outline=self.color, width=8, style="arc")
+        
+        # Valeur numérique au centre
+        self.create_text(65, 55, text=f"{self.value}{self.unit}", fill=C["text_main"], font=("Segoe UI", 12, "bold"))
+        # Label en dessous bien calibré
+        self.create_text(65, 82, text=self.label, fill=C["text_muted"], font=("Segoe UI", 7, "bold"), justify="center")
 
     def set_value(self, val):
         self.value = val
         self._draw()
 
-# --- COMPOSANT : TOGGLE SWITCH (STYLE iOS AVEC TEXTE ON/OFF) ---
+# --- COMPOSANT : TOGGLE SWITCH ---
 class IOSSwitch(tk.Canvas):
-    def __init__(self, parent, command=None, width=75, height=28):
+    def __init__(self, parent, command=None, width=70, height=26):
         super().__init__(parent, width=width, height=height, bg=C["bg_card"], bd=0, highlightthickness=0, cursor="hand2")
         self.command = command
         self.state = False
@@ -97,7 +104,8 @@ class IOSSwitch(tk.Canvas):
         self.state = not self.state
         self._animate()
         if self.command:
-            self.command(self.state)
+            # On passe un flag True pour indiquer que c'est un changement manuel
+            self.command(self.state, manuel=True)
 
     def _animate(self):
         target_x = self.x_on if self.state else self.x_off
@@ -142,6 +150,7 @@ def style_entry(e):
 
 def style_btn(b, bg=None, fg=None):
     b.configure(bg=bg or C["brand"], fg=fg or C["text_main"], relief="flat", bd=0, font=("Segoe UI", 9, "bold"), cursor="hand2", activebackground=bg or C["brand"], activeforeground=fg or C["text_main"])
+
 
 # --- FENÊTRE DE CONNEXION ---
 class PageConnexion(tk.Frame):
@@ -206,6 +215,7 @@ class PageConnexion(tk.Frame):
                 self.after(0, lambda: self.lbl_msg.configure(text="Échec de l'opération."))
         threading.Thread(target=tache, daemon=True).start()
 
+
 # --- TABLEAU DE BORD PRINCIPAL ---
 class PageDashboard(tk.Frame):
     def __init__(self, parent, uid, email, on_deconn):
@@ -260,29 +270,33 @@ class PageDashboard(tk.Frame):
         upper_grid = tk.Frame(main_box, bg=C["bg_main"])
         upper_grid.pack(fill="x", pady=(0, 15))
 
-        # --- BLOC 1 : CAPTEURS (ANNEAUX + PLUIE REINTEGRÉE) ---
+        # --- BLOC 1 : CAPTEURS (ALIGNEMENT CENTRÉ ET EN LIGNE) ---
         f_caps = tk.Frame(upper_grid, bg=C["bg_card"], padx=15, pady=15, highlightthickness=1, highlightbackground=C["border"])
         f_caps.pack(side="left", fill="both", expand=True, padx=(0, 10))
         tk.Label(f_caps, text="DONNÉES EN TEMPS RÉEL", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 10))
         
+        # ring_box configuré pour tout centrer parfaitement
         ring_box = tk.Frame(f_caps, bg=C["bg_card"])
-        ring_box.pack(fill="x", expand=True)
+        ring_box.pack(fill="both", expand=True, pady=5)
 
         self.c_temp = CircularProgress(ring_box, "TEMPÉRATURE ATMOSPHÈRE", " °C", 50, C["brand"])
-        self.c_temp.pack(side="left", padx=5, expand=True)
-        self.c_hum = CircularProgress(ring_box, "HUMIDITÉ DE L'AIR", " %", 100, C["success"])
-        self.c_hum.pack(side="left", padx=5, expand=True)
-        self.c_sol = CircularProgress(ring_box, "HYDROMÉTRIE DU SOL", " %", 100, C["warning"])
-        self.c_sol.pack(side="left", padx=5, expand=True)
+        self.c_temp.pack(side="left", padx=10, expand=True, anchor="center")
         
-        # Ajout du 4ème élément manquant : État de la Pluie
-        self.f_pluie_status = tk.Frame(ring_box, bg=C["bg_input"], width=105, height=105, highlightthickness=1, highlightbackground=C["border"])
-        self.f_pluie_status.pack(side="left", padx=5, expand=True)
+        self.c_hum = CircularProgress(ring_box, "HUMIDITÉ DE L'AIR", " %", 100, C["success"])
+        self.c_hum.pack(side="left", padx=10, expand=True, anchor="center")
+        
+        # NOM DU SOL CORRIGÉ EN : "HUMIDITE SOL" (Comme dans le 1)
+        self.c_sol = CircularProgress(ring_box, "HUMIDITE SOL", " %", 100, C["warning"])
+        self.c_sol.pack(side="left", padx=10, expand=True, anchor="center")
+        
+        # Bloc État de la Pluie aligné au centre verticalement avec le reste
+        self.f_pluie_status = tk.Frame(ring_box, bg=C["bg_input"], width=110, height=110, highlightthickness=1, highlightbackground=C["border"])
+        self.f_pluie_status.pack(side="left", padx=10, expand=True, anchor="center")
         self.f_pluie_status.pack_propagate(False)
         
         self.lbl_pluie_val = tk.Label(self.f_pluie_status, text="NON", font=("Segoe UI", 14, "bold"), bg=C["bg_input"], fg=C["text_main"])
-        self.lbl_pluie_val.pack(expand=True, pady=(15,0))
-        tk.Label(self.f_pluie_status, text="ÉTAT PLUIE", font=("Segoe UI", 7, "bold"), bg=C["bg_input"], fg=C["text_muted"]).pack(expand=True, pady=(0,15))
+        self.lbl_pluie_val.pack(expand=True, pady=(20, 0))
+        tk.Label(self.f_pluie_status, text="ÉTAT PLUIE", font=("Segoe UI", 7, "bold"), bg=C["bg_input"], fg=C["text_muted"]).pack(expand=True, pady=(0, 20))
 
         # --- BLOC 2 : RELAIS ---
         f_act = tk.Frame(upper_grid, bg=C["bg_card"], width=320, padx=20, pady=15, highlightthickness=1, highlightbackground=C["border"])
@@ -320,7 +334,7 @@ class PageDashboard(tk.Frame):
             self.table_stats.heading(c, text=text)
             self.table_stats.column(c, width=w, anchor="center")
 
-        # --- BLOC 4 : GESTION DES PROFILS VEGETAUX (Nom d'origine rétabli) ---
+        # --- BLOC 4 : GESTION DES PROFILS VEGETAUX ---
         self.plant_section = tk.Frame(middle_grid, bg=C["bg_card"], width=320, padx=20, pady=15, highlightthickness=1, highlightbackground=C["border"])
         self.plant_section.pack(side="right", fill="both", padx=(10, 0))
         self.plant_section.pack_propagate(False)
@@ -367,7 +381,6 @@ class PageDashboard(tk.Frame):
         tk.Label(self.plant_section, text=f"GESTION DES PROFILS VEGETAUX", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 10))
 
         if len(self.plantes) < 3:
-            # Nom d'origine rétabli : + ENREGISTRER UNE PLANTE
             btn_add = tk.Button(self.plant_section, text="+ ENREGISTRER UNE PLANTE", command=self._popup_plante)
             style_btn(btn_add, bg=C["success"])
             btn_add.pack(fill="x", pady=(0, 10), ipady=5)
@@ -420,7 +433,6 @@ class PageDashboard(tk.Frame):
         f = tk.Frame(pop, bg=C["bg_card"], padx=20, pady=20, highlightthickness=1, highlightbackground=C["border"])
         f.pack(fill="both", expand=True, padx=20, pady=(0, 20))
 
-        # Termes du Code 1 réintégrés à 100%
         fields = [("NOM DE LA PLANTE", "nom", ""), ("TEMPERATURE MAX (°C)", "t_max", "28"), ("HUMIDITE MIN SOL (%)", "e_min", "45")]
         entries = {}
         for lbl, key, d in fields:
@@ -444,15 +456,24 @@ class PageDashboard(tk.Frame):
 
         b = tk.Button(f, text="VALIDER LE PROFIL", command=valider); style_btn(b); b.pack(fill="x", pady=(10, 0), ipady=6)
 
-    def _api_pompe(self, state):
+    # --- CORRECTION DE LOGIQUE DES ACTIONNEURS + LOGS POMPE ON/OFF ---
+    def _api_pompe(self, state, manuel=False):
         self.pompe_on = state
-        self._log("OK" if state else "WARN", f"Relais Pompe -> {'ACTIF' if state else 'INACTIF'}")
-        threading.Thread(target=lambda: db.child("commandes").child(self.uid).update({"pompe": state}), daemon=True).start()
+        # Log personnalisé demandé : POMPE ON ou POMPE OFF
+        status_text = "POMPE ON" if state else "POMPE OFF"
+        self._log("OK" if state else "WARN", f"Relais Pompe -> {status_text}")
+        
+        # On envoie la commande à Firebase uniquement si l'action vient d'un clic physique (manuel)
+        if manuel:
+            threading.Thread(target=lambda: db.child("commandes").child(self.uid).update({"pompe": state}), daemon=True).start()
 
-    def _api_ventilo(self, state):
+    def _api_ventilo(self, state, manuel=False):
         self.ventilo_on = state
         self._log("OK" if state else "WARN", f"Relais Ventilateur -> {'ACTIF' if state else 'INACTIF'}")
-        threading.Thread(target=lambda: db.child("commandes").child(self.uid).update({"ventilateur": state}), daemon=True).start()
+        
+        # On envoie la commande à Firebase uniquement si l'action vient d'un clic physique (manuel)
+        if manuel:
+            threading.Thread(target=lambda: db.child("commandes").child(self.uid).update({"ventilateur": state}), daemon=True).start()
 
     def _rafraichir_donnees(self):
         def tache():
@@ -473,7 +494,6 @@ class PageDashboard(tk.Frame):
         self.c_hum.set_value(h)
         self.c_sol.set_value(s)
         
-        # Actualisation de la case d'état Pluie (Oui ou Non)
         if not p:
             self.lbl_pluie_val.configure(text="OUI 🌧", fg=C["danger"])
         else:
@@ -487,22 +507,29 @@ class PageDashboard(tk.Frame):
             conn.commit(); cur.close(); conn.close()
         except: pass
 
+        # --- LOGIQUE D'AUTOMATISATION SÉCURISÉE SANS CONFLIT TOGGLE ---
         if self.plante_active:
-            if s < self.plante_active["eau_min"] and not self.pompe_on:
-                self.pompe_on = True; self.toggle_pompe.set_state(True)
-                self._log("WARN", f"Alerte : Hydrométrie basse ({s}%). Activation Pompe.")
-                db.child("commandes").child(self.uid).update({"pompe": True})
-            elif s >= self.plante_active["eau_min"] + 10 and self.pompe_on:
-                self.pompe_on = False; self.toggle_pompe.set_state(False)
-                db.child("commandes").child(self.uid).update({"pompe": False})
+            # Vérification Pompe
+            if s < self.plante_active["eau_min"]:
+                if not self.pompe_on:
+                    self.toggle_pompe.set_state(True)
+                    self._api_pompe(True, manuel=True) # manuel=True pour forcer la mise à jour Firebase une seule fois
+                    self._log("WARN", f"Alerte : Hydrométrie basse ({s}%). Activation Pompe.")
+            elif s >= self.plante_active["eau_min"] + 10:
+                if self.pompe_on:
+                    self.toggle_pompe.set_state(False)
+                    self._api_pompe(False, manuel=True)
 
-            if t > self.plante_active["temp_max"] and not self.ventilo_on:
-                self.ventilo_on = True; self.toggle_ventilo.set_state(True)
-                self._log("WARN", f"Surchauffe ({t}°C > {self.plante_active['temp_max']}°C). Activation Ventilation.")
-                db.child("commandes").child(self.uid).update({"ventilateur": True})
-            elif t <= self.plante_active["temp_max"] - 2 and self.ventilo_on:
-                self.ventilo_on = False; self.toggle_ventilo.set_state(False)
-                db.child("commandes").child(self.uid).update({"ventilateur": False})
+            # Vérification Ventilateur (Régulation automatique stable sans boucle infinie)
+            if t > self.plante_active["temp_max"]:
+                if not self.ventilo_on:
+                    self.toggle_ventilo.set_state(True)
+                    self._api_ventilo(True, manuel=True)
+                    self._log("WARN", f"Surchauffe ({t}°C > {self.plante_active['temp_max']}°C). Activation Ventilation.")
+            elif t <= self.plante_active["temp_max"] - 2:
+                if self.ventilo_on:
+                    self.toggle_ventilo.set_state(False)
+                    self._api_ventilo(False, manuel=True)
 
     def _log(self, level, msg):
         self.after(0, self._log_ui, level, msg)
