@@ -38,7 +38,7 @@ C = {
 # --- COMPOSANT : ANNEAU DE PROGRESSION CIRCULAIRE ---
 class CircularProgress(tk.Canvas):
     def __init__(self, parent, label="Capteur", unit="", max_val=100, color="#3B82F6"):
-        super().__init__(parent, width=130, height=130, bg=C["bg_card"], bd=0, highlightthickness=0)
+        super().__init__(parent, width=120, height=120, bg=C["bg_card"], bd=0, highlightthickness=0)
         self.label = label
         self.unit = unit
         self.max_val = max_val
@@ -48,13 +48,13 @@ class CircularProgress(tk.Canvas):
 
     def _draw(self):
         self.delete("all")
-        self.create_arc(15, 15, 115, 115, start=0, extent=359, outline="#334155", width=8, style="arc")
+        self.create_arc(12, 12, 108, 108, start=0, extent=359, outline="#334155", width=7, style="arc")
         extent_angle = -(self.value / self.max_val) * 360 if self.max_val > 0 else 0
         if extent_angle < -360: extent_angle = -360
         if extent_angle != 0:
-            self.create_arc(15, 15, 115, 115, start=90, extent=extent_angle, outline=self.color, width=8, style="arc")
-        self.create_text(65, 55, text=f"{self.value}{self.unit}", fill=C["text_main"], font=("Segoe UI", 15, "bold"))
-        self.create_text(65, 80, text=self.label, fill=C["text_muted"], font=("Segoe UI", 8, "bold"))
+            self.create_arc(12, 12, 108, 108, start=90, extent=extent_angle, outline=self.color, width=7, style="arc")
+        self.create_text(60, 50, text=f"{self.value}{self.unit}", fill=C["text_main"], font=("Segoe UI", 13, "bold"))
+        self.create_text(60, 75, text=self.label, fill=C["text_muted"], font=("Segoe UI", 7, "bold"))
 
     def set_value(self, val):
         self.value = val
@@ -80,18 +80,15 @@ class IOSSwitch(tk.Canvas):
         self.delete("all")
         bg_color = C["brand"] if self.state else "#475569"
         
-        # Dessin du fond de l'interrupteur
         self.create_oval(0, 0, self.height, self.height, fill=bg_color, outline="")
         self.create_oval(self.width - self.height, 0, self.width, self.height, fill=bg_color, outline="")
         self.create_rectangle(self.radius, 0, self.width - self.radius, self.height, fill=bg_color, outline="")
         
-        # Ajout du texte d'état ON ou OFF intégré
         if self.state:
             self.create_text(self.radius + 2, self.radius, text="ON", fill="#FFFFFF", font=("Segoe UI", 8, "bold"), anchor="w")
         else:
             self.create_text(self.width - self.radius - 2, self.radius, text="OFF", fill="#E2E8F0", font=("Segoe UI", 8, "bold"), anchor="e")
             
-        # Pastille coulissante blanche
         self.create_oval(self.current_x - self.circle_radius, self.radius - self.circle_radius,
                          self.current_x + self.circle_radius, self.radius + self.circle_radius,
                          fill="#FFFFFF", outline="")
@@ -263,8 +260,8 @@ class PageDashboard(tk.Frame):
         upper_grid = tk.Frame(main_box, bg=C["bg_main"])
         upper_grid.pack(fill="x", pady=(0, 15))
 
-        # --- BLOC 1 : CAPTEURS (ANNEAUX) ---
-        f_caps = tk.Frame(upper_grid, bg=C["bg_card"], padx=20, pady=15, highlightthickness=1, highlightbackground=C["border"])
+        # --- BLOC 1 : CAPTEURS (ANNEAUX + PLUIE REINTEGRÉE) ---
+        f_caps = tk.Frame(upper_grid, bg=C["bg_card"], padx=15, pady=15, highlightthickness=1, highlightbackground=C["border"])
         f_caps.pack(side="left", fill="both", expand=True, padx=(0, 10))
         tk.Label(f_caps, text="DONNÉES EN TEMPS RÉEL", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 10))
         
@@ -272,11 +269,20 @@ class PageDashboard(tk.Frame):
         ring_box.pack(fill="x", expand=True)
 
         self.c_temp = CircularProgress(ring_box, "TEMPÉRATURE ATMOSPHÈRE", " °C", 50, C["brand"])
-        self.c_temp.pack(side="left", padx=10, expand=True)
+        self.c_temp.pack(side="left", padx=5, expand=True)
         self.c_hum = CircularProgress(ring_box, "HUMIDITÉ DE L'AIR", " %", 100, C["success"])
-        self.c_hum.pack(side="left", padx=10, expand=True)
+        self.c_hum.pack(side="left", padx=5, expand=True)
         self.c_sol = CircularProgress(ring_box, "HYDROMÉTRIE DU SOL", " %", 100, C["warning"])
-        self.c_sol.pack(side="left", padx=10, expand=True)
+        self.c_sol.pack(side="left", padx=5, expand=True)
+        
+        # Ajout du 4ème élément manquant : État de la Pluie
+        self.f_pluie_status = tk.Frame(ring_box, bg=C["bg_input"], width=105, height=105, highlightthickness=1, highlightbackground=C["border"])
+        self.f_pluie_status.pack(side="left", padx=5, expand=True)
+        self.f_pluie_status.pack_propagate(False)
+        
+        self.lbl_pluie_val = tk.Label(self.f_pluie_status, text="NON", font=("Segoe UI", 14, "bold"), bg=C["bg_input"], fg=C["text_main"])
+        self.lbl_pluie_val.pack(expand=True, pady=(15,0))
+        tk.Label(self.f_pluie_status, text="ÉTAT PLUIE", font=("Segoe UI", 7, "bold"), bg=C["bg_input"], fg=C["text_muted"]).pack(expand=True, pady=(0,15))
 
         # --- BLOC 2 : RELAIS ---
         f_act = tk.Frame(upper_grid, bg=C["bg_card"], width=320, padx=20, pady=15, highlightthickness=1, highlightbackground=C["border"])
@@ -314,7 +320,7 @@ class PageDashboard(tk.Frame):
             self.table_stats.heading(c, text=text)
             self.table_stats.column(c, width=w, anchor="center")
 
-        # --- BLOC 4 : MATRICE VÉGÉTALE ---
+        # --- BLOC 4 : GESTION DES PROFILS VEGETAUX (Nom d'origine rétabli) ---
         self.plant_section = tk.Frame(middle_grid, bg=C["bg_card"], width=320, padx=20, pady=15, highlightthickness=1, highlightbackground=C["border"])
         self.plant_section.pack(side="right", fill="both", padx=(10, 0))
         self.plant_section.pack_propagate(False)
@@ -332,7 +338,6 @@ class PageDashboard(tk.Frame):
         btn_clear = tk.Button(c_top, text="EFFACER LE LOG", command=self._clear_console, font=("Segoe UI", 8, "bold"), bg=C["bg_input"], fg=C["text_muted"], relief="flat", bd=0, cursor="hand2")
         btn_clear.pack(side="right")
 
-        # FIX : Taille de police modifiée de 8.5 à un entier (9) pour éviter le TclError
         self.console = tk.Text(f_console, bg=C["console_bg"], fg=C["text_main"], font=("Consolas", 9), relief="flat", bd=0, state="disabled", wrap="char")
         self.console.pack(fill="both", expand=True)
         
@@ -359,10 +364,11 @@ class PageDashboard(tk.Frame):
 
     def _render_plantes(self):
         for w in self.plant_section.winfo_children(): w.destroy()
-        tk.Label(self.plant_section, text=f"MATRICE VÉGÉTALE CONFIGURÉE ({len(self.plantes)}/3)", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 10))
+        tk.Label(self.plant_section, text=f"GESTION DES PROFILS VEGETAUX", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 10))
 
         if len(self.plantes) < 3:
-            btn_add = tk.Button(self.plant_section, text="+ ENREGISTRER UN PROFIL", command=self._popup_plante)
+            # Nom d'origine rétabli : + ENREGISTRER UNE PLANTE
+            btn_add = tk.Button(self.plant_section, text="+ ENREGISTRER UNE PLANTE", command=self._popup_plante)
             style_btn(btn_add, bg=C["success"])
             btn_add.pack(fill="x", pady=(0, 10), ipady=5)
 
@@ -414,7 +420,8 @@ class PageDashboard(tk.Frame):
         f = tk.Frame(pop, bg=C["bg_card"], padx=20, pady=20, highlightthickness=1, highlightbackground=C["border"])
         f.pack(fill="both", expand=True, padx=20, pady=(0, 20))
 
-        fields = [("NOM DU PROFIL", "nom", ""), ("TEMP MAX CIBLE (°C)", "t_max", "28"), ("SEUIL MIN EAU SOL (%)", "e_min", "45")]
+        # Termes du Code 1 réintégrés à 100%
+        fields = [("NOM DE LA PLANTE", "nom", ""), ("TEMPERATURE MAX (°C)", "t_max", "28"), ("HUMIDITE MIN SOL (%)", "e_min", "45")]
         entries = {}
         for lbl, key, d in fields:
             tk.Label(f, text=lbl, font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w")
@@ -465,6 +472,12 @@ class PageDashboard(tk.Frame):
         self.c_temp.set_value(t)
         self.c_hum.set_value(h)
         self.c_sol.set_value(s)
+        
+        # Actualisation de la case d'état Pluie (Oui ou Non)
+        if not p:
+            self.lbl_pluie_val.configure(text="OUI 🌧", fg=C["danger"])
+        else:
+            self.lbl_pluie_val.configure(text="NON ☀", fg=C["success"])
 
         self._log("INFO", f"Données -> T°: {t}°C | Sol: {s}% | Pluie: {'Oui' if not p else 'Non'}")
 
