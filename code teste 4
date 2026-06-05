@@ -58,18 +58,15 @@ class ToggleSwitch(tk.Canvas):
         self.delete("all")
         bg_color = C["accent"] if self.state else C["danger"]
         
-        # Fond du bouton (forme pilule)
         self.create_oval(0, 0, self.height, self.height, fill=bg_color, outline="")
         self.create_oval(self.width - self.height, 0, self.width, self.height, fill=bg_color, outline="")
         self.create_rectangle(self.radius, 0, self.width - self.radius, self.height, fill=bg_color, outline="")
         
-        # Texte ON / OFF intégré
         if self.state:
             self.create_text(self.radius + 8, self.radius, text="ON", fill="#FFFFFF", font=("Segoe UI", 9, "bold"), anchor="w")
         else:
             self.create_text(self.width - self.radius - 8, self.radius, text="OFF", fill="#FFFFFF", font=("Segoe UI", 9, "bold"), anchor="e")
         
-        # Curseur coulissant blanc
         self.create_oval(self.current_x - self.circle_radius, self.radius - self.circle_radius,
                          self.current_x + self.circle_radius, self.radius + self.circle_radius,
                          fill="#FFFFFF", outline="")
@@ -181,7 +178,7 @@ class PageConnexion(tk.Frame):
             self.btn_submit.configure(text="Créer mon compte")
             self.btn_switch.configure(text="Déjà inscrit ? Se connecter")
         else:
-            self.mode == "connexion"
+            self.mode = "connexion"
             self.lbl_title.configure(text="Connexion")
             self.btn_submit.configure(text="Se connecter")
             self.btn_switch.configure(text="Pas de compte ? Créer un compte")
@@ -240,12 +237,12 @@ class PageDashboard(tk.Frame):
         style = ttk.Style()
         style.theme_use("default")
         
-        # Amélioration radicale de la visibilité du tableau
+        # VISIBILITÉ DU TABLEAU MAXIMALE : Texte blanc pur sur fond sombre contrasté
         style.configure("Treeview", 
-                        bg=C["bg_card"], 
-                        fg="#FFFFFF",            # Écriture des données en Blanc Pur
-                        fieldbackground=C["bg_card"],
-                        rowheight=30, 
+                        background="#0B111E", 
+                        foreground="#FFFFFF",            
+                        fieldbackground="#0B111E",
+                        rowheight=28, 
                         bd=0, 
                         font=("Segoe UI", 10), 
                         borderwidth=0)
@@ -254,13 +251,13 @@ class PageDashboard(tk.Frame):
                   background=[("selected", C["bg_input"])], 
                   foreground=[("selected", C["accent"])])
         
-        # En-têtes du tableau plus nets et pro
+        # En-têtes ultra-visibles
         style.configure("Treeview.Heading", 
-                        background="#16223F",     # Fond des en-têtes contrasté
-                        foreground="#00E676",     # Texte des en-têtes en Vert Fluide
+                        background="#1A263F",     
+                        foreground="#00E676",     
                         relief="flat", 
                         font=("Segoe UI", 10, "bold"))
-        style.map("Treeview.Heading", background=[("active", "#16223F")])
+        style.map("Treeview.Heading", background=[("active", "#1A263F")])
 
     def _charger_plantes(self):
         try:
@@ -320,7 +317,7 @@ class PageDashboard(tk.Frame):
 
             self._cards_widgets[key] = (lbl_val, p_bar, unit, color)
 
-        # Actionneurs avec les nouveaux boutons à glissière ON/OFF
+        # Actionneurs
         act_frame = tk.Frame(col_gauche, bg=C["bg_card"], highlightthickness=1, highlightbackground=C["border"], padx=20, pady=18)
         act_frame.pack(fill="x", pady=(0, 15))
         
@@ -341,22 +338,22 @@ class PageDashboard(tk.Frame):
         self.toggle_ventilo = ToggleSwitch(v_sub, command=self._api_ventilo)
         self.toggle_ventilo.pack(side="right")
 
-        # Plantes configurées
+        # Plantes
         self.plant_section = tk.Frame(col_gauche, bg=C["bg_card"], highlightthickness=1, highlightbackground=C["border"], padx=20, pady=18)
         self.plant_section.pack(fill="x", pady=(0, 15))
         self._render_plantes()
 
-        # --- RE-STYLISATION DU TABLEAU DE STATISTIQUES ---
+        # --- TABLEAU DE STATISTIQUES RE-STYLISÉ ---
         stats_frame = tk.Frame(col_gauche, bg=C["bg_card"], highlightthickness=1, highlightbackground=C["border"], padx=20, pady=15)
         stats_frame.pack(fill="both", expand=True)
 
         tk.Label(stats_frame, text="TABLEAU STATISTIQUE DES CAPTEURS", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 10))
         
-        # Ajout explicite des grilles/bordures visibles
         self.table_stats = ttk.Treeview(stats_frame, columns=("date", "t", "ha", "hs", "p"), show="headings", selectmode="none")
         self.table_stats.pack(fill="both", expand=True)
         
-        self.table_stats.heading("date", text="Horodatage / Date")
+        # Changement d'intitulé : Uniquement "Date"
+        self.table_stats.heading("date", text="Date")
         self.table_stats.heading("t", text="Température")
         self.table_stats.heading("ha", text="Hum. Air")
         self.table_stats.heading("hs", text="Hum. Sol")
@@ -368,11 +365,11 @@ class PageDashboard(tk.Frame):
         self.table_stats.column("hs", width=90, anchor="center")
         self.table_stats.column("p", width=80, anchor="center")
 
-        # Alternance de couleurs ultra-lisibles pour détacher les lignes
-        self.table_stats.tag_configure("pair", background="#141D30")
-        self.table_stats.tag_configure("impair", background="#0B101D")
+        # Alternance de lignes avec fort contraste (Gris sombre et Bleu nuit profond) pour forcer la visibilité
+        self.table_stats.tag_configure("pair", background="#121A2E", foreground="#FFFFFF")
+        self.table_stats.tag_configure("impair", background="#0A0F1C", foreground="#FFFFFF")
 
-        # --- COLONNE DE DROITE (CONSOLE SANS CHANGEMENTS) ---
+        # --- COLONNE DE DROITE (CONSOLE SANS CHANGEMENTS STRUCTURELS) ---
         col_droite = tk.Frame(workspace, bg=C["bg_card"], width=320, highlightthickness=1, highlightbackground=C["border"], padx=15, pady=15)
         col_droite.pack(side="right", fill="both")
         col_droite.pack_propagate(False)
@@ -382,7 +379,8 @@ class PageDashboard(tk.Frame):
         c_wrapper = tk.Frame(col_droite, bg=C["console_bg"], pady=5, padx=5, highlightthickness=1, highlightbackground=C["border"])
         c_wrapper.pack(fill="both", expand=True, pady=10)
 
-        self.console = tk.Text(c_wrapper, bg=C["console_bg"], fg=C["text_main"], font=("Consolas", 9), relief="flat", bd=0, state="disabled", wrap="word")
+        # OPTIMISATION LOG : wrap="none" et police ajustée pour tout garder proprement aligné en une ligne
+        self.console = tk.Text(c_wrapper, bg=C["console_bg"], fg=C["text_main"], font=("Consolas", 8), relief="flat", bd=0, state="disabled", wrap="none")
         self.console.pack(fill="both", expand=True)
 
         self.console.tag_configure("INFO", foreground=C["info"])
@@ -626,7 +624,7 @@ class PageDashboard(tk.Frame):
 class App:
     def __init__(self):
         self.fen = tk.Tk()
-        self.fen.title("Serre Connectée Management System")
+        self.fen.title("Serre Connected Management System")
         self.fen.geometry("1080x840")  
         self.fen.configure(bg=C["bg_main"])
         self.fen.resizable(False, False)
