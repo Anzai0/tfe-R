@@ -60,10 +60,10 @@ class CircularProgress(tk.Canvas):
         self.value = val
         self._draw()
 
-# --- COMPOSANT : TOGGLE SWITCH (STYLE iOS) ---
+# --- COMPOSANT : TOGGLE SWITCH (STYLE iOS AVEC TEXTE ON/OFF) ---
 class IOSSwitch(tk.Canvas):
-    def __init__(self, parent, command=None, width=55, height=28):
-        super().__init__(parent, width=width, height=height, bg=C["bg_input"], bd=0, highlightthickness=0, cursor="hand2")
+    def __init__(self, parent, command=None, width=65, height=28):
+        super().__init__(parent, width=width, height=height, bg=C["bg_card"], bd=0, highlightthickness=0, cursor="hand2")
         self.command = command
         self.state = False
         self.width = width
@@ -79,9 +79,19 @@ class IOSSwitch(tk.Canvas):
     def _draw(self):
         self.delete("all")
         bg_color = C["brand"] if self.state else "#475569"
+        
+        # Dessin du fond de l'interrupteur
         self.create_oval(0, 0, self.height, self.height, fill=bg_color, outline="")
         self.create_oval(self.width - self.height, 0, self.width, self.height, fill=bg_color, outline="")
         self.create_rectangle(self.radius, 0, self.width - self.radius, self.height, fill=bg_color, outline="")
+        
+        # Ajout du texte d'état ON ou OFF intégré de manière élégante
+        if self.state:
+            self.create_text(self.radius + 4, self.radius, text="ON", fill="#FFFFFF", font=("Segoe UI", 8, "bold"), anchor="w")
+        else:
+            self.create_text(self.width - self.radius - 4, self.radius, text="OFF", fill="#E2E8F0", font=("Segoe UI", 8, "bold"), anchor="e")
+            
+        # Pastille coulissante blanche
         self.create_oval(self.current_x - self.circle_radius, self.radius - self.circle_radius,
                          self.current_x + self.circle_radius, self.radius + self.circle_radius,
                          fill="#FFFFFF", outline="")
@@ -234,7 +244,7 @@ class PageDashboard(tk.Frame):
         if self.plantes: self.plante_active = self.plantes[0]
 
     def _build_layout(self):
-        # Top Header (Noms Code 1)
+        # Top Header (Noms originaux du Code 1)
         header = tk.Frame(self, bg=C["bg_card"], height=60, padx=25)
         header.pack(fill="x")
         header.pack_propagate(False)
@@ -268,7 +278,7 @@ class PageDashboard(tk.Frame):
         self.c_sol = CircularProgress(ring_box, "HYDROMÉTRIE DU SOL", " %", 100, C["warning"])
         self.c_sol.pack(side="left", padx=10, expand=True)
 
-        # --- BLOC 2 : RELAIS (Noms Code 1) ---
+        # --- BLOC 2 : RELAIS (Noms d'origine) ---
         f_act = tk.Frame(upper_grid, bg=C["bg_card"], width=320, padx=20, pady=15, highlightthickness=1, highlightbackground=C["border"])
         f_act.pack(side="right", fill="both", padx=(10, 0))
         f_act.pack_propagate(False)
@@ -295,7 +305,6 @@ class PageDashboard(tk.Frame):
         f_table.pack(side="left", fill="both", expand=True, padx=(0, 10))
         tk.Label(f_table, text="TABLEAU STATISTIQUE DES CAPTEURS", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 10))
 
-        # On limite le conteneur du tableau pour qu'il ne pousse pas tout vers le bas
         table_container = tk.Frame(f_table, bg=C["bg_card"])
         table_container.pack(fill="both", expand=True)
 
@@ -456,7 +465,7 @@ class PageDashboard(tk.Frame):
         self.c_hum.set_value(h)
         self.c_sol.set_value(s)
 
-        # Lancement du Log de Synchronisation dans la console
+        # Impression dans le terminal de log
         self._log("INFO", f"Données -> T°: {t}°C | Sol: {s}% | Pluie: {'Oui' if not p else 'Non'}")
 
         try:
