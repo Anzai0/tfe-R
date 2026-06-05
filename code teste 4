@@ -22,33 +22,31 @@ db = firebase.database()
 
 # --- PALETTE DE COULEURS PREMIUM ---
 C = {
-    "bg_main":     "#070A13",  # Fond général sombre haut de gamme
-    "bg_card":     "#0F1524",  # Fonds des conteneurs
-    "bg_input":    "#161F33",  # Entrées et jauges vides
-    "text_main":   "#FFFFFF",  # Texte principal
-    "text_muted":  "#526484",  # Texte secondaire / légendes
-    "accent":      "#00E676",  # Vert connecté (ON)
-    "danger":      "#FF3333",  # Rouge alerte (OFF)
-    "warning":     "#FFA000",  # Orange
-    "info":        "#00B0FF",  # Bleu néon
-    "border":      "#1E293B",  # Bordures fines et discrètes
-    "console_bg":  "#04060A"   # Fond terminal
+    "bg_main":     "#070A13",  
+    "bg_card":     "#0F1524",  
+    "bg_input":    "#161F33",  
+    "text_main":   "#FFFFFF",  
+    "text_muted":  "#6B7A99",  
+    "accent":      "#00E676",  # Vert ON
+    "danger":      "#FF3333",  # Rouge OFF
+    "warning":     "#FFA000",  
+    "info":        "#00B0FF",  
+    "border":      "#222F47",  
+    "console_bg":  "#04060A"   
 }
 
-# --- COMPOSANT : BOUTON INTERRUPTEUR (TOGGLE SWITCH ANIMÉ) ---
+# --- COMPOSANT : BOUTON INTERRUPTEUR (TOGGLE SWITCH ANIMÉ AVEC TEXTE) ---
 class ToggleSwitch(tk.Canvas):
-    def __init__(self, parent, command=None, width=60, height=30):
+    def __init__(self, parent, command=None, width=75, height=30):
         super().__init__(parent, width=width, height=height, bg=C["bg_input"], bd=0, highlightthickness=0, cursor="hand2")
         self.command = command
         self.state = False
         self.width = width
         self.height = height
         
-        # Dimensions internes
         self.radius = height // 2
         self.circle_radius = self.radius - 3
         
-        # Positions x du rond (OFF à gauche, ON à droite)
         self.x_off = self.radius
         self.x_on = width - self.radius
         self.current_x = self.x_off
@@ -58,15 +56,20 @@ class ToggleSwitch(tk.Canvas):
 
     def _draw(self):
         self.delete("all")
-        # Couleur de fond selon l'état
         bg_color = C["accent"] if self.state else C["danger"]
         
-        # Dessin du fond (pilule arrondie)
+        # Fond du bouton (forme pilule)
         self.create_oval(0, 0, self.height, self.height, fill=bg_color, outline="")
         self.create_oval(self.width - self.height, 0, self.width, self.height, fill=bg_color, outline="")
         self.create_rectangle(self.radius, 0, self.width - self.radius, self.height, fill=bg_color, outline="")
         
-        # Dessin du curseur blanc coulissant
+        # Texte ON / OFF intégré
+        if self.state:
+            self.create_text(self.radius + 8, self.radius, text="ON", fill="#FFFFFF", font=("Segoe UI", 9, "bold"), anchor="w")
+        else:
+            self.create_text(self.width - self.radius - 8, self.radius, text="OFF", fill="#FFFFFF", font=("Segoe UI", 9, "bold"), anchor="e")
+        
+        # Curseur coulissant blanc
         self.create_oval(self.current_x - self.circle_radius, self.radius - self.circle_radius,
                          self.current_x + self.circle_radius, self.radius + self.circle_radius,
                          fill="#FFFFFF", outline="")
@@ -119,7 +122,6 @@ def init_db():
     except Exception as e:
         print(f"[DB] Erreur init: {e}")
 
-# --- STYLISATION DES COMPOSANTS ---
 def style_entry(e):
     e.configure(bg=C["bg_input"], fg=C["text_main"], insertbackground=C["accent"],
                 relief="flat", bd=0, font=("Segoe UI", 11),
@@ -150,19 +152,16 @@ class PageConnexion(tk.Frame):
         self.lbl_subtitle = tk.Label(container, text="SERRE CONNECTÉE", font=("Segoe UI", 10, "bold"), bg=C["bg_card"], fg=C["text_muted"])
         self.lbl_subtitle.pack(anchor="w", pady=(0, 25))
 
-        # Email
         tk.Label(container, text="ADRESSE EMAIL", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w")
         self.e_email = tk.Entry(container)
         style_entry(self.e_email)
         self.e_email.pack(fill="x", pady=(5, 15), ipady=8)
 
-        # Mot de passe
         tk.Label(container, text="MOT DE PASSE", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w")
         self.e_mdp = tk.Entry(container, show="*")
         style_entry(self.e_mdp)
         self.e_mdp.pack(fill="x", pady=(5, 20), ipady=8)
 
-        # Bouton Valider
         self.btn_submit = tk.Button(container, text="Se connecter", command=self._action)
         style_btn(self.btn_submit)
         self.btn_submit.pack(fill="x", ipady=6, pady=(0, 15))
@@ -182,7 +181,7 @@ class PageConnexion(tk.Frame):
             self.btn_submit.configure(text="Créer mon compte")
             self.btn_switch.configure(text="Déjà inscrit ? Se connecter")
         else:
-            self.mode = "connexion"
+            self.mode == "connexion"
             self.lbl_title.configure(text="Connexion")
             self.btn_submit.configure(text="Se connecter")
             self.btn_switch.configure(text="Pas de compte ? Créer un compte")
@@ -219,7 +218,7 @@ class PageConnexion(tk.Frame):
         threading.Thread(target=tache, daemon=True).start()
 
 
-# --- VUE 2 : DASHBOARD MAGNIFIÉ + INTERRUPTEURS + TABLEAU DE STATS ---
+# --- VUE 2 : DASHBOARD COMPLET ---
 class PageDashboard(tk.Frame):
     def __init__(self, parent, uid, email, on_deconn):
         super().__init__(parent, bg=C["bg_main"])
@@ -238,15 +237,30 @@ class PageDashboard(tk.Frame):
         self._charger_historique_stats()
 
     def _configurer_styles_treeview(self):
-        # Configuration esthétique globale des tableaux de données
         style = ttk.Style()
         style.theme_use("default")
-        style.configure("Treeview", bg=C["bg_card"], fg=C["text_main"], fieldbackground=C["bg_card"],
-                        rowheight=28, bd=0, font=("Segoe UI", 9), borderwidth=0)
-        style.map("Treeview", background=[("selected", C["bg_input"])], foreground=[("selected", C["accent"])])
-        style.configure("Treeview.Heading", background=C["bg_input"], foreground=C["text_muted"],
-                        relief="flat", font=("Segoe UI", 9, "bold"))
-        style.map("Treeview.Heading", background=[("active", C["bg_input"])])
+        
+        # Amélioration radicale de la visibilité du tableau
+        style.configure("Treeview", 
+                        bg=C["bg_card"], 
+                        fg="#FFFFFF",            # Écriture des données en Blanc Pur
+                        fieldbackground=C["bg_card"],
+                        rowheight=30, 
+                        bd=0, 
+                        font=("Segoe UI", 10), 
+                        borderwidth=0)
+        
+        style.map("Treeview", 
+                  background=[("selected", C["bg_input"])], 
+                  foreground=[("selected", C["accent"])])
+        
+        # En-têtes du tableau plus nets et pro
+        style.configure("Treeview.Heading", 
+                        background="#16223F",     # Fond des en-têtes contrasté
+                        foreground="#00E676",     # Texte des en-têtes en Vert Fluide
+                        relief="flat", 
+                        font=("Segoe UI", 10, "bold"))
+        style.map("Treeview.Heading", background=[("active", "#16223F")])
 
     def _charger_plantes(self):
         try:
@@ -259,7 +273,6 @@ class PageDashboard(tk.Frame):
         if self.plantes: self.plante_active = self.plantes[0]
 
     def _build_layout(self):
-        # Navbar principale
         navbar = tk.Frame(self, bg=C["bg_card"], height=65, highlightthickness=1, highlightbackground=C["border"])
         navbar.pack(fill="x", side="top")
         navbar.pack_propagate(False)
@@ -272,7 +285,6 @@ class PageDashboard(tk.Frame):
 
         tk.Label(navbar, text=f"Utilisateur : {self.email}", font=("Segoe UI", 10), bg=C["bg_card"], fg=C["text_muted"]).pack(side="right", padx=10)
 
-        # Conteneur central étendu
         workspace = tk.Frame(self, bg=C["bg_main"])
         workspace.pack(fill="both", expand=True, padx=20, pady=20)
 
@@ -280,7 +292,7 @@ class PageDashboard(tk.Frame):
         col_gauche = tk.Frame(workspace, bg=C["bg_main"])
         col_gauche.pack(side="left", fill="both", expand=True, padx=(0, 15))
 
-        # Jauges Grid
+        # Capteurs Grid
         grid_capteurs = tk.Frame(col_gauche, bg=C["bg_main"])
         grid_capteurs.pack(fill="x", pady=(0, 15))
         
@@ -308,7 +320,7 @@ class PageDashboard(tk.Frame):
 
             self._cards_widgets[key] = (lbl_val, p_bar, unit, color)
 
-        # Bloc Actionneurs avec boutons Glissants Animés (Toggle)
+        # Actionneurs avec les nouveaux boutons à glissière ON/OFF
         act_frame = tk.Frame(col_gauche, bg=C["bg_card"], highlightthickness=1, highlightbackground=C["border"], padx=20, pady=18)
         act_frame.pack(fill="x", pady=(0, 15))
         
@@ -317,33 +329,31 @@ class PageDashboard(tk.Frame):
         btn_box = tk.Frame(act_frame, bg=C["bg_card"])
         btn_box.pack(fill="x")
 
-        # Pompe Interrupteur
         p_sub = tk.Frame(btn_box, bg=C["bg_input"], padx=20, pady=12, highlightthickness=1, highlightbackground=C["border"])
         p_sub.pack(side="left", fill="x", expand=True, padx=(0,10))
         tk.Label(p_sub, text="Pompe à eau", font=("Segoe UI", 10, "bold"), bg=C["bg_input"], fg=C["text_main"]).pack(side="left")
         self.toggle_pompe = ToggleSwitch(p_sub, command=self._api_pompe)
         self.toggle_pompe.pack(side="right")
 
-        # Ventilateur Interrupteur
         v_sub = tk.Frame(btn_box, bg=C["bg_input"], padx=20, pady=12, highlightthickness=1, highlightbackground=C["border"])
         v_sub.pack(side="left", fill="x", expand=True, padx=(10,0))
         tk.Label(v_sub, text="Ventilateur", font=("Segoe UI", 10, "bold"), bg=C["bg_input"], fg=C["text_main"]).pack(side="left")
         self.toggle_ventilo = ToggleSwitch(v_sub, command=self._api_ventilo)
         self.toggle_ventilo.pack(side="right")
 
-        # Zone Liste des Plantes
+        # Plantes configurées
         self.plant_section = tk.Frame(col_gauche, bg=C["bg_card"], highlightthickness=1, highlightbackground=C["border"], padx=20, pady=18)
         self.plant_section.pack(fill="x", pady=(0, 15))
         self._render_plantes()
 
-        # --- NOUVEAUTÉ : TABLEAU DE STATISTIQUES HISTORIQUES ---
+        # --- RE-STYLISATION DU TABLEAU DE STATISTIQUES ---
         stats_frame = tk.Frame(col_gauche, bg=C["bg_card"], highlightthickness=1, highlightbackground=C["border"], padx=20, pady=15)
         stats_frame.pack(fill="both", expand=True)
 
         tk.Label(stats_frame, text="TABLEAU STATISTIQUE DES CAPTEURS", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 10))
         
-        cols = ("date", "t", "ha", "hs", "p")
-        self.table_stats = ttk.Treeview(stats_frame, columns=cols, show="headings", selectmode="none")
+        # Ajout explicite des grilles/bordures visibles
+        self.table_stats = ttk.Treeview(stats_frame, columns=("date", "t", "ha", "hs", "p"), show="headings", selectmode="none")
         self.table_stats.pack(fill="both", expand=True)
         
         self.table_stats.heading("date", text="Horodatage / Date")
@@ -358,11 +368,11 @@ class PageDashboard(tk.Frame):
         self.table_stats.column("hs", width=90, anchor="center")
         self.table_stats.column("p", width=80, anchor="center")
 
-        # Config tags pour lignes alternées
-        self.table_stats.tag_configure("pair", background="#121B2D")
-        self.table_stats.tag_configure("impair", background=C["bg_card"])
+        # Alternance de couleurs ultra-lisibles pour détacher les lignes
+        self.table_stats.tag_configure("pair", background="#141D30")
+        self.table_stats.tag_configure("impair", background="#0B101D")
 
-        # --- COLONNE DE DROITE (CONSOLE) ---
+        # --- COLONNE DE DROITE (CONSOLE SANS CHANGEMENTS) ---
         col_droite = tk.Frame(workspace, bg=C["bg_card"], width=320, highlightthickness=1, highlightbackground=C["border"], padx=15, pady=15)
         col_droite.pack(side="right", fill="both")
         col_droite.pack_propagate(False)
@@ -393,7 +403,6 @@ class PageDashboard(tk.Frame):
             cur.execute("SELECT timestamp, temperature, humidite_air, humidite_sol, pluie FROM capteurs WHERE uid=%s ORDER BY id DESC LIMIT 5", (self.uid,))
             rows = cur.fetchall()
             
-            # Vider le tableau existant
             for item in self.table_stats.get_children():
                 self.table_stats.delete(item)
                 
@@ -404,9 +413,9 @@ class PageDashboard(tk.Frame):
                 self.table_stats.insert("", "end", values=(date_str, f"{r[1]} °C", f"{r[2]} %", f"{r[3]} %", pluie_str), tags=(tag,))
                 
             cur.close(); conn.close()
-        except Exception as e:
+        except:
             pass
-        self.after(10000, self._charger_historique_stats)  # Actualisation toutes les 10s
+        self.after(10000, self._charger_historique_stats)
 
     def _render_plantes(self):
         for w in self.plant_section.winfo_children(): w.destroy()
@@ -525,7 +534,6 @@ class PageDashboard(tk.Frame):
         style_btn(btn_save)
         btn_save.pack(fill="x", ipady=6, pady=(10, 0))
 
-    # --- ACTIONS DES TOGGLE SWITCH ANIMÉS ---
     def _api_pompe(self, state):
         self.pompe_on = state
         self._log("OK" if state else "WARN", f"Manuel -> Pompe : {'ON' if state else 'OFF'}")
@@ -574,7 +582,6 @@ class PageDashboard(tk.Frame):
         except Exception as e:
             self._log("ERR", f"Erreur MariaDB : {e}")
 
-        # Automatisme intelligent et synchronisation des Toggles
         if self.plante_active:
             if sol < self.plante_active["eau_min"] and not self.pompe_on:
                 self._log("WARN", f"Sol sec ({sol}% < {self.plante_active['eau_min']}%). Pompe activée.")
@@ -620,7 +627,7 @@ class App:
     def __init__(self):
         self.fen = tk.Tk()
         self.fen.title("Serre Connectée Management System")
-        self.fen.geometry("1080x840")  # Hauteur légèrement augmentée pour le grand tableau de statistiques
+        self.fen.geometry("1080x840")  
         self.fen.configure(bg=C["bg_main"])
         self.fen.resizable(False, False)
         
