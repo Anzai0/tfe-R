@@ -62,7 +62,7 @@ class CircularProgress(tk.Canvas):
 
 # --- COMPOSANT : TOGGLE SWITCH (STYLE iOS AVEC TEXTE ON/OFF) ---
 class IOSSwitch(tk.Canvas):
-    def __init__(self, parent, command=None, width=65, height=28):
+    def __init__(self, parent, command=None, width=75, height=28):
         super().__init__(parent, width=width, height=height, bg=C["bg_card"], bd=0, highlightthickness=0, cursor="hand2")
         self.command = command
         self.state = False
@@ -85,11 +85,11 @@ class IOSSwitch(tk.Canvas):
         self.create_oval(self.width - self.height, 0, self.width, self.height, fill=bg_color, outline="")
         self.create_rectangle(self.radius, 0, self.width - self.radius, self.height, fill=bg_color, outline="")
         
-        # Ajout du texte d'état ON ou OFF intégré de manière élégante
+        # Ajout du texte d'état ON ou OFF intégré
         if self.state:
-            self.create_text(self.radius + 4, self.radius, text="ON", fill="#FFFFFF", font=("Segoe UI", 8, "bold"), anchor="w")
+            self.create_text(self.radius + 2, self.radius, text="ON", fill="#FFFFFF", font=("Segoe UI", 8, "bold"), anchor="w")
         else:
-            self.create_text(self.width - self.radius - 4, self.radius, text="OFF", fill="#E2E8F0", font=("Segoe UI", 8, "bold"), anchor="e")
+            self.create_text(self.width - self.radius - 2, self.radius, text="OFF", fill="#E2E8F0", font=("Segoe UI", 8, "bold"), anchor="e")
             
         # Pastille coulissante blanche
         self.create_oval(self.current_x - self.circle_radius, self.radius - self.circle_radius,
@@ -244,7 +244,7 @@ class PageDashboard(tk.Frame):
         if self.plantes: self.plante_active = self.plantes[0]
 
     def _build_layout(self):
-        # Top Header (Noms originaux du Code 1)
+        # Top Header
         header = tk.Frame(self, bg=C["bg_card"], height=60, padx=25)
         header.pack(fill="x")
         header.pack_propagate(False)
@@ -278,7 +278,7 @@ class PageDashboard(tk.Frame):
         self.c_sol = CircularProgress(ring_box, "HYDROMÉTRIE DU SOL", " %", 100, C["warning"])
         self.c_sol.pack(side="left", padx=10, expand=True)
 
-        # --- BLOC 2 : RELAIS (Noms d'origine) ---
+        # --- BLOC 2 : RELAIS ---
         f_act = tk.Frame(upper_grid, bg=C["bg_card"], width=320, padx=20, pady=15, highlightthickness=1, highlightbackground=C["border"])
         f_act.pack(side="right", fill="both", padx=(10, 0))
         f_act.pack_propagate(False)
@@ -300,7 +300,7 @@ class PageDashboard(tk.Frame):
         middle_grid = tk.Frame(main_box, bg=C["bg_main"])
         middle_grid.pack(fill="both", expand=True, pady=(0, 15))
 
-        # --- BLOC 3 : TABLEAU STATISTIQUE (RÉDUIT EN HAUTEUR) ---
+        # --- BLOC 3 : TABLEAU STATISTIQUE ---
         f_table = tk.Frame(middle_grid, bg=C["bg_card"], padx=20, pady=15, highlightthickness=1, highlightbackground=C["border"])
         f_table.pack(side="left", fill="both", expand=True, padx=(0, 10))
         tk.Label(f_table, text="TABLEAU STATISTIQUE DES CAPTEURS", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 10))
@@ -320,7 +320,7 @@ class PageDashboard(tk.Frame):
         self.plant_section.pack_propagate(False)
         self._render_plantes()
 
-        # --- BLOC 5 : CONSOLE DE LOGS (AGRANDIE VERTICALEMENT) ---
+        # --- BLOC 5 : CONSOLE DE LOGS ---
         f_console = tk.Frame(main_box, bg=C["bg_card"], height=210, padx=20, pady=15, highlightthickness=1, highlightbackground=C["border"])
         f_console.pack(fill="x", side="bottom")
         f_console.pack_propagate(False)
@@ -332,7 +332,8 @@ class PageDashboard(tk.Frame):
         btn_clear = tk.Button(c_top, text="EFFACER LE LOG", command=self._clear_console, font=("Segoe UI", 8, "bold"), bg=C["bg_input"], fg=C["text_muted"], relief="flat", bd=0, cursor="hand2")
         btn_clear.pack(side="right")
 
-        self.console = tk.Text(f_console, bg=C["console_bg"], fg=C["text_main"], font=("Consolas", 8.5), relief="flat", bd=0, state="disabled", wrap="char")
+        # FIX : Taille de police modifiée de 8.5 à un entier (9) pour éviter le TclError
+        self.console = tk.Text(f_console, bg=C["console_bg"], fg=C["text_main"], font=("Consolas", 9), relief="flat", bd=0, state="disabled", wrap="char")
         self.console.pack(fill="both", expand=True)
         
         self.console.tag_configure("INFO", foreground=C["brand"])
@@ -465,7 +466,6 @@ class PageDashboard(tk.Frame):
         self.c_hum.set_value(h)
         self.c_sol.set_value(s)
 
-        # Impression dans le terminal de log
         self._log("INFO", f"Données -> T°: {t}°C | Sol: {s}% | Pluie: {'Oui' if not p else 'Non'}")
 
         try:
