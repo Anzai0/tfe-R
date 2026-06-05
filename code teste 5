@@ -35,11 +35,11 @@ C = {
     "console_bg":   "#020617"
 }
 
-# --- COMPOSANT : ANNEAU DE PROGRESSION CIRCULAIRE ---
+# --- COMPOSANT : ANNEAU DE PROGRESSION CIRCULAIRE (AGRANDI & CORRIGÉ) ---
 class CircularProgress(tk.Canvas):
     def __init__(self, parent, label="Capteur", unit="", max_val=100, color="#3B82F6"):
-        # Augmentation légère de la zone pour éviter que les labels longs se fassent couper
-        super().__init__(parent, width=130, height=130, bg=C["bg_card"], bd=0, highlightthickness=0)
+        # Augmentation de la taille globale du Canvas à 160x160 pour des cercles plus grands
+        super().__init__(parent, width=160, height=160, bg=C["bg_card"], bd=0, highlightthickness=0)
         self.label = label
         self.unit = unit
         self.max_val = max_val
@@ -49,19 +49,21 @@ class CircularProgress(tk.Canvas):
 
     def _draw(self):
         self.delete("all")
-        # Arc de fond
-        self.create_arc(15, 15, 115, 115, start=0, extent=359, outline="#334155", width=8, style="arc")
+        # Arc de fond plus grand (coordonnées adaptées pour un cercle plus large et centré)
+        self.create_arc(15, 15, 145, 145, start=0, extent=359, outline="#334155", width=9, style="arc")
         
         # Arc de progression
         extent_angle = -(self.value / self.max_val) * 360 if self.max_val > 0 else 0
         if extent_angle < -360: extent_angle = -360
         if extent_angle != 0:
-            self.create_arc(15, 15, 115, 115, start=90, extent=extent_angle, outline=self.color, width=8, style="arc")
+            self.create_arc(15, 15, 145, 145, start=90, extent=extent_angle, outline=self.color, width=9, style="arc")
         
-        # Valeur numérique au centre
-        self.create_text(65, 55, text=f"{self.value}{self.unit}", fill=C["text_main"], font=("Segoe UI", 12, "bold"))
-        # Label en dessous bien calibré
-        self.create_text(65, 82, text=self.label, fill=C["text_muted"], font=("Segoe UI", 7, "bold"), justify="center")
+        # Valeur numérique au centre (ex: 24.5 °C)
+        self.create_text(80, 70, text=f"{self.value}{self.unit}", fill=C["text_main"], font=("Segoe UI", 13, "bold"))
+        
+        # Label sur UNE SEULE LIGNE (élargi à width=160 pour ne plus jamais couper ou aller à la ligne)
+        self.create_text(80, 112, text=self.label, fill=C["text_muted"], 
+                         font=("Segoe UI", 7, "bold"), justify="center", width=160)
 
     def set_value(self, val):
         self.value = val
@@ -104,7 +106,6 @@ class IOSSwitch(tk.Canvas):
         self.state = not self.state
         self._animate()
         if self.command:
-            # On passe un flag True pour indiquer que c'est un changement manuel
             self.command(self.state, manuel=True)
 
     def _animate(self):
@@ -270,33 +271,31 @@ class PageDashboard(tk.Frame):
         upper_grid = tk.Frame(main_box, bg=C["bg_main"])
         upper_grid.pack(fill="x", pady=(0, 15))
 
-        # --- BLOC 1 : CAPTEURS (ALIGNEMENT CENTRÉ ET EN LIGNE) ---
+        # --- BLOC 1 : CAPTEURS (ALIGNEMENT PARFAIT EN LIGNE AVEC DES CERCLES PLUS GRANDS) ---
         f_caps = tk.Frame(upper_grid, bg=C["bg_card"], padx=15, pady=15, highlightthickness=1, highlightbackground=C["border"])
         f_caps.pack(side="left", fill="both", expand=True, padx=(0, 10))
         tk.Label(f_caps, text="DONNÉES EN TEMPS RÉEL", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 10))
         
-        # ring_box configuré pour tout centrer parfaitement
         ring_box = tk.Frame(f_caps, bg=C["bg_card"])
         ring_box.pack(fill="both", expand=True, pady=5)
 
         self.c_temp = CircularProgress(ring_box, "TEMPÉRATURE ATMOSPHÈRE", " °C", 50, C["brand"])
-        self.c_temp.pack(side="left", padx=10, expand=True, anchor="center")
+        self.c_temp.pack(side="left", padx=8, expand=True, anchor="center")
         
         self.c_hum = CircularProgress(ring_box, "HUMIDITÉ DE L'AIR", " %", 100, C["success"])
-        self.c_hum.pack(side="left", padx=10, expand=True, anchor="center")
+        self.c_hum.pack(side="left", padx=8, expand=True, anchor="center")
         
-        # NOM DU SOL CORRIGÉ EN : "HUMIDITE SOL" (Comme dans le 1)
         self.c_sol = CircularProgress(ring_box, "HUMIDITE SOL", " %", 100, C["warning"])
-        self.c_sol.pack(side="left", padx=10, expand=True, anchor="center")
+        self.c_sol.pack(side="left", padx=8, expand=True, anchor="center")
         
-        # Bloc État de la Pluie aligné au centre verticalement avec le reste
-        self.f_pluie_status = tk.Frame(ring_box, bg=C["bg_input"], width=110, height=110, highlightthickness=1, highlightbackground=C["border"])
-        self.f_pluie_status.pack(side="left", padx=10, expand=True, anchor="center")
+        # Bloc État de la Pluie redimensionné à 130x130 pour s'aligner parfaitement en hauteur avec les grands cercles
+        self.f_pluie_status = tk.Frame(ring_box, bg=C["bg_input"], width=130, height=130, highlightthickness=1, highlightbackground=C["border"])
+        self.f_pluie_status.pack(side="left", padx=12, expand=True, anchor="center")
         self.f_pluie_status.pack_propagate(False)
         
-        self.lbl_pluie_val = tk.Label(self.f_pluie_status, text="NON", font=("Segoe UI", 14, "bold"), bg=C["bg_input"], fg=C["text_main"])
-        self.lbl_pluie_val.pack(expand=True, pady=(20, 0))
-        tk.Label(self.f_pluie_status, text="ÉTAT PLUIE", font=("Segoe UI", 7, "bold"), bg=C["bg_input"], fg=C["text_muted"]).pack(expand=True, pady=(0, 20))
+        self.lbl_pluie_val = tk.Label(self.f_pluie_status, text="NON", font=("Segoe UI", 16, "bold"), bg=C["bg_input"], fg=C["text_main"])
+        self.lbl_pluie_val.pack(expand=True, pady=(25, 0))
+        tk.Label(self.f_pluie_status, text="ÉTAT PLUIE", font=("Segoe UI", 8, "bold"), bg=C["bg_input"], fg=C["text_muted"]).pack(expand=True, pady=(0, 25))
 
         # --- BLOC 2 : RELAIS ---
         f_act = tk.Frame(upper_grid, bg=C["bg_card"], width=320, padx=20, pady=15, highlightthickness=1, highlightbackground=C["border"])
@@ -456,14 +455,11 @@ class PageDashboard(tk.Frame):
 
         b = tk.Button(f, text="VALIDER LE PROFIL", command=valider); style_btn(b); b.pack(fill="x", pady=(10, 0), ipady=6)
 
-    # --- CORRECTION DE LOGIQUE DES ACTIONNEURS + LOGS POMPE ON/OFF ---
     def _api_pompe(self, state, manuel=False):
         self.pompe_on = state
-        # Log personnalisé demandé : POMPE ON ou POMPE OFF
         status_text = "POMPE ON" if state else "POMPE OFF"
         self._log("OK" if state else "WARN", f"Relais Pompe -> {status_text}")
         
-        # On envoie la commande à Firebase uniquement si l'action vient d'un clic physique (manuel)
         if manuel:
             threading.Thread(target=lambda: db.child("commandes").child(self.uid).update({"pompe": state}), daemon=True).start()
 
@@ -471,7 +467,6 @@ class PageDashboard(tk.Frame):
         self.ventilo_on = state
         self._log("OK" if state else "WARN", f"Relais Ventilateur -> {'ACTIF' if state else 'INACTIF'}")
         
-        # On envoie la commande à Firebase uniquement si l'action vient d'un clic physique (manuel)
         if manuel:
             threading.Thread(target=lambda: db.child("commandes").child(self.uid).update({"ventilateur": state}), daemon=True).start()
 
@@ -507,20 +502,19 @@ class PageDashboard(tk.Frame):
             conn.commit(); cur.close(); conn.close()
         except: pass
 
-        # --- LOGIQUE D'AUTOMATISATION SÉCURISÉE SANS CONFLIT TOGGLE ---
         if self.plante_active:
             # Vérification Pompe
             if s < self.plante_active["eau_min"]:
                 if not self.pompe_on:
                     self.toggle_pompe.set_state(True)
-                    self._api_pompe(True, manuel=True) # manuel=True pour forcer la mise à jour Firebase une seule fois
+                    self._api_pompe(True, manuel=True)
                     self._log("WARN", f"Alerte : Hydrométrie basse ({s}%). Activation Pompe.")
             elif s >= self.plante_active["eau_min"] + 10:
                 if self.pompe_on:
                     self.toggle_pompe.set_state(False)
                     self._api_pompe(False, manuel=True)
 
-            # Vérification Ventilateur (Régulation automatique stable sans boucle infinie)
+            # Vérification Ventilateur
             if t > self.plante_active["temp_max"]:
                 if not self.ventilo_on:
                     self.toggle_ventilo.set_state(True)
@@ -553,7 +547,7 @@ class App:
     def __init__(self):
         self.fen = tk.Tk()
         self.fen.title("EcoSphere OS")
-        self.fen.geometry("1100x820")
+        self.fen.geometry("1120x820") # Fenêtre légèrement élargie pour accueillir la nouvelle disposition
         self.fen.configure(bg=C["bg_main"])
         self.fen.resizable(False, False)
         init_db()
