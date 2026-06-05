@@ -285,7 +285,7 @@ class PageDashboard(tk.Frame):
         self.c_sol = CircularProgress(ring_box, "Humidité Sol", "%", 100, C["warning"])
         self.c_sol.pack(side="left", padx=10, expand=True)
 
-        # --- BLOC 2 : RELAIS & ACTIONNEURS (STYLE APPARTEMENT SMART) ---
+        # --- BLOC 2 : RELAIS & ACTIONNEURS ---
         f_act = tk.Frame(upper_grid, bg=C["bg_card"], width=300, padx=20, pady=20, highlightthickness=1, highlightbackground=C["border"])
         f_act.pack(side="right", fill="both", padx=(10, 0))
         f_act.pack_propagate(False)
@@ -336,11 +336,14 @@ class PageDashboard(tk.Frame):
         btn_clear = tk.Button(c_top, text="EFFACER LOGS", command=self._clear_console, font=("Segoe UI", 8, "bold"), bg=C["bg_input"], fg=C["text_muted"], relief="flat", bd=0, cursor="hand2")
         btn_clear.pack(side="right")
 
+        # CORRECTION : Utilisation de foreground= au lieu de fg= pour la configuration sécurisée des tags d'un bloc Text
         self.console = tk.Text(f_console, bg=C["console_bg"], fg=C["text_main"], font=("Consolas", 8), relief="flat", bd=0, state="disabled", wrap="char")
         self.console.pack(fill="both", expand=True)
         
-        for lvl, color in [("INFO", C["brand"]), ("OK", C["success"]), ("WARN", C["warning"]), ("ERR", C["danger"])]:
-            self.console.tag_configure(lvl, foreground=color)
+        self.console.tag_configure("INFO", foreground=C["brand"])
+        self.console.tag_configure("OK", foreground=C["success"])
+        self.console.tag_configure("WARN", foreground=C["warning"])
+        self.console.tag_configure("ERR", foreground=C["danger"])
         self.console.tag_configure("MUTED", foreground=C["text_muted"])
 
         self._log("INFO", "Système Eco-Sphere initialisé.")
@@ -512,7 +515,7 @@ class App:
     def __init__(self):
         self.fen = tk.Tk()
         self.fen.title("EcoSphere OS")
-        self.fen.geometry("1100選820")
+        # CORRECTION : Remplacement du caractère invalide par un 'x' standard de géométrie Tkinter
         self.fen.geometry("1100x820")
         self.fen.configure(bg=C["bg_main"])
         self.fen.resizable(False, False)
