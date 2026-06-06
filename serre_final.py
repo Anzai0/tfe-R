@@ -1,21 +1,14 @@
 # -*- coding: utf-8 -*-
 import time
-import board
-import busio
-import adafruit_dht
-import adafruit_ads1x15.ads1115 as ADS
-from adafruit_ads1x15.analog_in import AnalogIn
-from gpiozero import TonalBuzzer, OutputDevice
-from gpiozero.tones import Tone
+import random
 import pyrebase
 import pymysql
 import os
 import json
 import getpass
+import threading
 
 pymysql.install_as_MySQLdb()
-
-os.environ['GPIOZERO_PIN_FACTORY'] = 'rpigpio'
 
 # ─── Firebase (juste pour authentification) ────────────────────────────────────
 firebase_config = {
@@ -138,7 +131,7 @@ def lire_config_plante(uid):
             return data
     except Exception as e:
         print(f"[Firebase] Erreur lecture config plante: {e}")
-    return {"nom": "Plante", "temp_max": 30.0, "eau_min": 40.0}
+    return {"nom": "Ma plante", "temp_max": 30.0, "eau_min": 40.0}
 
 # ─── Envoi capteurs à MariaDB ─────────────────────────────────────────────────
 def envoyer_capteurs_mariadb(uid, temp, hum, sol, pluie, pompe, ventilo):
@@ -154,7 +147,7 @@ def envoyer_capteurs_mariadb(uid, temp, hum, sol, pluie, pompe, ventilo):
         conn.commit()
         cur.close()
         conn.close()
-        print(f"[MariaDB] Capteurs envoyés ✓")
+        print(f"[MariaDB] ✓ T:{temp:.1f}°C | H:{hum:.1f}% | Sol:{sol:.1f}% | P:{pompe} | V:{ventilo}")
     except Exception as e:
         print(f"[MariaDB] Erreur envoi: {e}")
 
@@ -180,85 +173,31 @@ def reset_commandes_firebase(uid):
     except Exception as e:
         print(f"[Firebase] Erreur reset: {e}")
 
-# ─── LCD ──────────────────────────────────────────────────────────────────────
-def init_lcd():
-    try:
-        from RPLCD.i2c import CharLCD
-        lcd = CharLCD('PCF8574', 0x27, cols=16, rows=2)
-        lcd.clear()
-        return lcd
-    except Exception as e:
-        print(f"[LCD] Erreur init: {e}")
-        return None
-
-def lcd_write_safe(lcd, line1, line2=""):
-    try:
-        if lcd is None:
-            lcd = init_lcd()
-        if lcd:
-            lcd.clear()
-            lcd.write_string(line1[:16])
-            lcd.cursor_pos = (1, 0)
-            lcd.write_string(line2[:16])
-    except Exception as e:
-        print(f"[LCD] Erreur écriture: {e}")
-        try:
-            lcd = init_lcd()
-        except:
-            lcd = None
-    return lcd
-
-# ─── ADS1115 ──────────────────────────────────────────────────────────────────
-def init_ads():
-    try:
-        i2c = busio.I2C(board.SCL, board.SDA)
-        ads = ADS.ADS1115(i2c)
-        capteur_pluie = AnalogIn(ads, ADS.P0)
-        capteur_sol = AnalogIn(ads, ADS.P1)
-        print("[ADS1115] Initialisé ✓")
-        return capteur_pluie, capteur_sol
-    except Exception as e:
-        print(f"[ADS1115] Erreur init: {e}")
-        return None, None
-
-# ─── Lecture humidité sol ─────────────────────────────────────────────────────
-def lire_humidite_sol(capteur_sol):
-    try:
-        val_brute = capteur_sol.value
-        val_min = 6000
-        val_max = 26000
-        pourcentage = ((val_max - val_brute) / (val_max - val_min)) * 100
-        pourcentage = max(0, min(100, pourcentage))
-        return round(pourcentage, 1)
-    except Exception as e:
-        print(f"[Sol] Erreur lecture: {e}")
-        return 0
-
-# ─── Lecture pluie ────────────────────────────────────────────────────────────
-def lire_pluie(capteur_pluie):
-    try:
-        return capteur_pluie.value < 10000
-    except Exception as e:
-        print(f"[Pluie] Erreur lecture: {e}")
-        return False
-
-# ─── Buzzer ──────────────────────────────────────────────────────────────────
-def init_buzzer():
-    try:
-        buzzer = TonalBuzzer(18)
-        return buzzer
-    except Exception as e:
-        print(f"[Buzzer] Erreur init: {e}")
-        return None
-
-def buzzer_alerte(buzzer):
-    try:
-        if buzzer:
-            buzzer.play(Tone("A4"))
-            time.sleep(0.3)
-            buzzer.stop()
-    except Exception as e:
-        print(f"[Buzzer] Erreur: {e}")
+# ─── Simulation capteurs ──────────────────────────────────────────────────────
+class SimulateurCapteurs:
+    def __init__(self):
+        self.temp = 22.0
+        self.hum = 50.0
+        self.sol = 65.0
+        self.pluie = False
+        self.lock = threading.Lock()
+    
+    def lire(self):
+        with self.lock:
+            # Variation aléatoire réaliste
+            self.temp += random.uniform(-0.5, 0.5)
+            self.hum += random.uniform(-2, 2)
+            self.sol += random.uniform(-1, 1)
+            
+            # Limites
+            self.temp = max(15, min(35, self.temp))
+            self.hum = max(30, min(95, self.hum))
+            self.sol = max(20, min(100, self.sol))
+            
+            # Pluie aléatoire (10% de chance)
+            self.pluie = random.random() < 0.1
+            
+            return self.temp, self.hum, self.sol, self.pluie
 
 # ─── Logique auto (temp/humidité) ─────────────────────────────────────────────
 def logique_automatique(temp, sol, config_plante, mode_auto):
@@ -280,7 +219,7 @@ def logique_automatique(temp, sol, config_plante, mode_auto):
 
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    print("[Système] Démarrage...")
+    print("[Système] Initialisation du matériel...")
     
     # Initialisation
     init_db()
@@ -299,37 +238,21 @@ if __name__ == "__main__":
     # Reset commandes
     reset_commandes_firebase(uid)
     
-    # Initialisations hardware
-    dht = adafruit_dht.DHT11(board.D4)
-    capteur_pluie, capteur_sol = init_ads()
-    buzzer = init_buzzer()
-    lcd = init_lcd()
-    
-    # Relais
-    pompe = OutputDevice(17)
-    ventilateur = OutputDevice(27)
-    pompe.off()
-    ventilateur.off()
+    # Simulateur (pas de capteurs physiques)
+    sim = SimulateurCapteurs()
     
     # États
     etat_pompe = False
     etat_ventilo = False
     mode_auto = True
-    firebase_counter = 0
     
     print("[Système] Démarrage boucle principale...")
+    print("[Système] Les données sont SIMULÉES (pas de capteurs physiques)")
     
     try:
         while True:
-            # ── Lecture capteurs ──────────────────────────────────────────
-            try:
-                temp = dht.temperature
-                hum = dht.humidity
-            except:
-                temp, hum = None, None
-            
-            pourcentage_sol = lire_humidite_sol(capteur_sol) if capteur_sol else 0
-            pluie = lire_pluie(capteur_pluie) if capteur_pluie else False
+            # ── Lecture capteurs (simulés) ────────────────────────────────
+            temp, hum, sol, pluie = sim.lire()
             
             # ── Lecture commandes Firebase ────────────────────────────────
             commandes = lire_commandes_firebase(uid)
@@ -338,60 +261,31 @@ if __name__ == "__main__":
             if mode_auto:
                 # Logique automatique
                 etat_pompe, etat_ventilo = logique_automatique(
-                    temp or 25, pourcentage_sol, config_plante, mode_auto
+                    temp, sol, config_plante, mode_auto
                 )
             else:
                 # Manuel depuis Firebase
                 etat_pompe = commandes.get("pompe", False)
                 etat_ventilo = commandes.get("ventilateur", False)
             
-            # ── Contrôle relais ──────────────────────────────────────────
-            if etat_pompe:
-                pompe.on()
-            else:
-                pompe.off()
-            
-            if etat_ventilo:
-                ventilateur.on()
-            else:
-                ventilateur.off()
-            
-            # ── Affichage LCD ────────────────────────────────────────────
-            if temp is not None and hum is not None:
-                lcd = lcd_write_safe(
-                    lcd,
-                    f"T:{temp:.1f}°C H:{hum:.0f}%",
-                    f"Sol:{pourcentage_sol:.0f}% P:{etat_pompe} V:{etat_ventilo}"
-                )
-            
             # ── Envoi MariaDB ────────────────────────────────────────────
-            firebase_counter += 1
-            if firebase_counter >= 2:
-                firebase_counter = 0
-                if temp is not None and hum is not None:
-                    envoyer_capteurs_mariadb(
-                        uid,
-                        round(temp, 1),
-                        round(hum, 1),
-                        round(pourcentage_sol, 1),
-                        pluie,
-                        etat_pompe,
-                        etat_ventilo
-                    )
+            envoyer_capteurs_mariadb(
+                uid,
+                round(temp, 1),
+                round(hum, 1),
+                round(sol, 1),
+                pluie,
+                etat_pompe,
+                etat_ventilo
+            )
             
             # ── Console ──────────────────────────────────────────────────
-            status = f"T:{temp or '--'}°C | H:{hum or '--'}% | " \
-                    f"Sol:{pourcentage_sol:.0f}% | Pluie:{pluie} | " \
-                    f"Pompe:{etat_pompe} | Ventilo:{etat_ventilo} | " \
-                    f"Mode:{'AUTO' if mode_auto else 'MANUEL'}"
+            status = f"Mode:{'AUTO' if mode_auto else 'MANUEL'} | " \
+                    f"Pompe:{etat_pompe} | Ventilo:{etat_ventilo}"
             print(status)
             
             time.sleep(2)
     
     except KeyboardInterrupt:
         print("\n[Système] Arrêt...")
-        pompe.off()
-        ventilateur.off()
-        if lcd:
-            lcd_write_safe(lcd, "Systeme arrete", "")
         print("[Système] ✓ Arrêt propre.")
