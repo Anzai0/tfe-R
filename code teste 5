@@ -79,7 +79,7 @@ class RainIndicator(tk.Canvas):
         # 1. On dessine l'anneau extérieur coloré identique aux autres cercles
         self.create_arc(bbox, start=0, extent=359, outline=self.color, width=14, style="arc")
         
-        # CORRECTION : Le fond intérieur est maintenant STRICTEMENT le même fond que la carte (C["bg_card"])
+        # 2. Le fond intérieur est strictement le même fond que la carte
         inner_bbox = (27, 27, 173, 173)
         self.create_oval(inner_bbox, fill=C["bg_card"], outline="")
         
@@ -87,7 +87,7 @@ class RainIndicator(tk.Canvas):
         text_status = "Oui" if self.is_raining else "Non"
         self.create_text(100, 100, text=text_status, fill="#FFFFFF", font=("Segoe UI", 18, "bold"))
         
-        # 4. Label "PLUIE" en bas aligné au millimètre
+        # 4. Label "PLUIE" en bas
         self.create_text(100, 205, text=self.label, fill=C["text_muted"], font=("Segoe UI", 8, "bold"), justify="center")
 
     def set_status(self, is_raining):
@@ -310,7 +310,7 @@ class PageDashboard(tk.Frame):
         self.c_sol = CircularProgress(ring_box, "HYDROMÉTRIE DU SOL", " %", 100, C["warning"])
         self.c_sol.pack(side="left", padx=5, expand=True)
         
-        # Le cercle PLUIE (Parfaitement raccord sur la même couleur de fond désormais)
+        # Le cercle PLUIE
         self.c_pluie = RainIndicator(ring_box, "PLUIE", C["info"])
         self.c_pluie.pack(side="left", padx=5, expand=True)
 
@@ -343,9 +343,10 @@ class PageDashboard(tk.Frame):
         table_container = tk.Frame(f_table, bg=C["bg_card"])
         table_container.pack(fill="both", expand=True)
 
+        # CORRECTION : La première colonne se nomme désormais uniquement "date" / "DATE"
         self.table_stats = ttk.Treeview(table_container, columns=("date", "t", "ha", "hs", "p"), show="headings", selectmode="none")
         self.table_stats.pack(fill="both", expand=True)
-        for c, text, w in [("date", "Horodatage / Date", 160), ("t", "Température", 95), ("ha", "Hum. Air", 95), ("hs", "Hum. Sol", 95), ("p", "Pluie", 75)]:
+        for c, text, w in [("date", "DATE", 160), ("t", "Température", 95), ("ha", "Hum. Air", 95), ("hs", "Hum. Sol", 95), ("p", "Pluie", 75)]:
             self.table_stats.heading(c, text=text)
             self.table_stats.column(c, width=w, anchor="center")
 
@@ -393,9 +394,12 @@ class PageDashboard(tk.Frame):
 
     def _render_plantes(self):
         for w in self.plant_section.winfo_children(): w.destroy()
-        tk.Label(self.plant_section, text=f"GESTION DES PROFILS VEGETAUX", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 10))
+        
+        # CORRECTION : Ajout du compteur dynamique 1/3, 2/3, 3/3 à côté du titre
+        nb_plantes = len(self.plantes)
+        tk.Label(self.plant_section, text=f"GESTION DES PROFILS VEGETAUX ({nb_plantes}/3)", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 10))
 
-        if len(self.plantes) < 3:
+        if nb_plantes < 3:
             btn_add = tk.Button(self.plant_section, text="+ ENREGISTRER UNE PLANTE", command=self._popup_plante)
             style_btn(btn_add, bg=C["success"])
             btn_add.pack(fill="x", pady=(0, 10), ipady=5)
