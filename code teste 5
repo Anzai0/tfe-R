@@ -63,7 +63,7 @@ class CircularProgress(tk.Canvas):
         self.value = val
         self._draw()
 
-# --- COMPOSANT : COMPOSANT PLUIE LOOK ANNEAU + INTÉRIEUR NOIR ---
+# --- COMPOSANT : COMPOSANT PLUIE PARFAITEMENT HARMONISÉ ---
 class RainIndicator(tk.Canvas):
     def __init__(self, parent, label="PLUIE", color="#38BDF8"):
         super().__init__(parent, width=200, height=220, bg=C["bg_card"], bd=0, highlightthickness=0)
@@ -79,15 +79,15 @@ class RainIndicator(tk.Canvas):
         # 1. On dessine l'anneau extérieur coloré identique aux autres cercles
         self.create_arc(bbox, start=0, extent=359, outline=self.color, width=14, style="arc")
         
-        # 2. On remplit l'intérieur en noir/sombre (couleur de fond de la console pour l'effet creux/noir)
+        # CORRECTION : Le fond intérieur est maintenant STRICTEMENT le même fond que la carte (C["bg_card"])
         inner_bbox = (27, 27, 173, 173)
-        self.create_oval(inner_bbox, fill=C["console_bg"], outline="")
+        self.create_oval(inner_bbox, fill=C["bg_card"], outline="")
         
-        # 3. Texte dynamique "Oui" ou "Non" écrit en blanc pur
+        # 3. Texte dynamique "Oui" ou "Non" écrit en blanc pur au centre
         text_status = "Oui" if self.is_raining else "Non"
         self.create_text(100, 100, text=text_status, fill="#FFFFFF", font=("Segoe UI", 18, "bold"))
         
-        # 4. Label "PLUIE" en bas sur une ligne unique
+        # 4. Label "PLUIE" en bas aligné au millimètre
         self.create_text(100, 205, text=self.label, fill=C["text_muted"], font=("Segoe UI", 8, "bold"), justify="center")
 
     def set_status(self, is_raining):
@@ -310,7 +310,7 @@ class PageDashboard(tk.Frame):
         self.c_sol = CircularProgress(ring_box, "HYDROMÉTRIE DU SOL", " %", 100, C["warning"])
         self.c_sol.pack(side="left", padx=5, expand=True)
         
-        # Le nouveau cercle PLUIE (Anneau bleu info, fond noir intérieur, texte blanc)
+        # Le cercle PLUIE (Parfaitement raccord sur la même couleur de fond désormais)
         self.c_pluie = RainIndicator(ring_box, "PLUIE", C["info"])
         self.c_pluie.pack(side="left", padx=5, expand=True)
 
@@ -503,7 +503,6 @@ class PageDashboard(tk.Frame):
         self.c_hum.set_value(h)
         self.c_sol.set_value(s)
         
-        # Logique Firebase : False = il pleut, True = pas de pluie
         is_raining_now = not p
         self.c_pluie.set_status(is_raining_now)
 
