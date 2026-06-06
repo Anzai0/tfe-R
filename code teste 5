@@ -63,11 +63,12 @@ class CircularProgress(tk.Canvas):
         self.value = val
         self._draw()
 
-# --- COMPOSANT : ROND INDICATEUR DE PLUIE COMPLET (NOUVEAU) ---
+# --- COMPOSANT : COMPOSANT PLUIE LOOK ANNEAU + INTÉRIEUR NOIR ---
 class RainIndicator(tk.Canvas):
-    def __init__(self, parent, label="PLUIE"):
+    def __init__(self, parent, label="PLUIE", color="#38BDF8"):
         super().__init__(parent, width=200, height=220, bg=C["bg_card"], bd=0, highlightthickness=0)
         self.label = label
+        self.color = color
         self.is_raining = False
         self._draw()
 
@@ -75,18 +76,18 @@ class RainIndicator(tk.Canvas):
         self.delete("all")
         bbox = (20, 20, 180, 180)
         
-        # Sélection de la couleur du rond rempli et du texte selon l'état
-        circle_color = C["danger"] if self.is_raining else C["bg_input"]
-        text_status = "OUI" if self.is_raining else "NON"
-        text_color = C["text_main"] if self.is_raining else C["text_muted"]
-
-        # Dessin du rond rempli au centre
-        self.create_oval(bbox, fill=circle_color, outline="#334155", width=2)
+        # 1. On dessine l'anneau extérieur coloré identique aux autres cercles
+        self.create_arc(bbox, start=0, extent=359, outline=self.color, width=14, style="arc")
         
-        # Texte Oui / Non bien gros au milieu du rond
-        self.create_text(100, 100, text=text_status, fill=text_color, font=("Segoe UI", 22, "bold"))
+        # 2. On remplit l'intérieur en noir/sombre (couleur de fond de la console pour l'effet creux/noir)
+        inner_bbox = (27, 27, 173, 173)
+        self.create_oval(inner_bbox, fill=C["console_bg"], outline="")
         
-        # Label "PLUIE" en bas sur une seule ligne uniforme
+        # 3. Texte dynamique "Oui" ou "Non" écrit en blanc pur
+        text_status = "Oui" if self.is_raining else "Non"
+        self.create_text(100, 100, text=text_status, fill="#FFFFFF", font=("Segoe UI", 18, "bold"))
+        
+        # 4. Label "PLUIE" en bas sur une ligne unique
         self.create_text(100, 205, text=self.label, fill=C["text_muted"], font=("Segoe UI", 8, "bold"), justify="center")
 
     def set_status(self, is_raining):
@@ -291,7 +292,7 @@ class PageDashboard(tk.Frame):
         upper_grid = tk.Frame(main_box, bg=C["bg_main"])
         upper_grid.pack(fill="x", pady=(0, 15))
 
-        # --- BLOC 1 : CAPTEURS AVEC COMPOSANTS HARMONISÉS ---
+        # --- BLOC 1 : CAPTEURS ---
         f_caps = tk.Frame(upper_grid, bg=C["bg_card"], padx=15, pady=15, highlightthickness=1, highlightbackground=C["border"])
         f_caps.pack(side="left", fill="both", expand=True, padx=(0, 10))
         tk.Label(f_caps, text="DONNÉES EN TEMPS RÉEL", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 5))
@@ -309,8 +310,8 @@ class PageDashboard(tk.Frame):
         self.c_sol = CircularProgress(ring_box, "HYDROMÉTRIE DU SOL", " %", 100, C["warning"])
         self.c_sol.pack(side="left", padx=5, expand=True)
         
-        # Nouveau Rond Rempli pour l'indicateur Pluie (Parfaitement identique en gabarit)
-        self.c_pluie = RainIndicator(ring_box, "PLUIE")
+        # Le nouveau cercle PLUIE (Anneau bleu info, fond noir intérieur, texte blanc)
+        self.c_pluie = RainIndicator(ring_box, "PLUIE", C["info"])
         self.c_pluie.pack(side="left", padx=5, expand=True)
 
         # --- BLOC 2 : RELAIS ---
@@ -502,7 +503,7 @@ class PageDashboard(tk.Frame):
         self.c_hum.set_value(h)
         self.c_sol.set_value(s)
         
-        # Inversion logique : si p == False, il y a de la pluie (Rond rouge OUI), sinon NON (Rond gris normal)
+        # Logique Firebase : False = il pleut, True = pas de pluie
         is_raining_now = not p
         self.c_pluie.set_status(is_raining_now)
 
