@@ -46,7 +46,7 @@ class LinearTechGauge(tk.Frame):
         self.value = 0.0
         
         # Textes de données
-        self.lbl_title = tk.Label(self, text=self.label, font=("Segoe UI UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"])
+        self.lbl_title = tk.Label(self, text=self.label, font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"])
         self.lbl_title.pack(anchor="w")
         
         self.lbl_val = tk.Label(self, text=f"0.0 {self.unit}", font=("Consolas", 18, "bold"), bg=C["bg_card"], fg=C["text_main"])
@@ -58,7 +58,7 @@ class LinearTechGauge(tk.Frame):
         
     def set_value(self, val):
         self.value = val
-        self.lbl_val.configure(text=f"{val}{self.unit}")
+        self.lbl_val.configure(text=f"{val} {self.unit}")
         self.canvas.delete("all")
         
         # Calcul de la largeur
@@ -113,7 +113,6 @@ class CustomToggle(tk.Canvas):
     def _draw(self):
         self.delete("all")
         bg_col = C["accent_cyan"] if self.state else C["bg_input"]
-        # Forme rectangulaire moderne chanfreinée visuellement
         self.create_rectangle(0, 0, self.width, self.height, fill=bg_col, outline=C["border"])
         
         # Curseur carré/rectangulaire
@@ -248,7 +247,7 @@ class PageDashboard(tk.Frame):
         if self.plantes: self.plante_active = self.plantes[0]
 
     def _build_interface(self):
-        # 1. Barre de navigation Haute / Tech strip
+        # 1. Barre de navigation Haute
         top_bar = tk.Frame(self, bg=C["bg_card"], height=55, padx=20, highlightthickness=1, highlightbackground=C["border"])
         top_bar.pack(fill="x")
         top_bar.pack_propagate(False)
@@ -260,11 +259,11 @@ class PageDashboard(tk.Frame):
         btn_out.pack(side="right", padx=(15, 0))
         tk.Label(top_bar, text=f"SYS_OPERATOR: {self.email.upper()}", font=("Consolas", 9), bg=C["bg_card"], fg=C["text_muted"]).pack(side="right")
 
-        # Zone centrale principale divisée asymétriquement
+        # Zone centrale principale
         layout_box = tk.Frame(self, bg=C["bg_main"], padx=20, pady=20)
         layout_box.pack(fill="both", expand=True)
 
-        # PANNEAU GAUCHE : Télémétrie Linéaire + Actionneurs
+        # PANNEAU GAUCHE
         left_panel = tk.Frame(layout_box, bg=C["bg_main"])
         left_panel.pack(side="left", fill="both", expand=True, padx=(0, 15))
 
@@ -274,7 +273,6 @@ class PageDashboard(tk.Frame):
         
         tk.Label(card_caps, text="SYSTEM TELEMETRY - SENSORS", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_main"]).pack(anchor="w", pady=(0, 15))
         
-        # Integration des nouvelles jauges linéaires horizontales
         self.g_temp = LinearTechGauge(card_caps, "TEMPERATURE GENERALE", "°C", 50, C["accent_cyan"])
         self.g_temp.pack(fill="x", pady=8)
         
@@ -287,7 +285,7 @@ class PageDashboard(tk.Frame):
         self.g_pluie = DigitalRainWidget(card_caps, "DETECTEUR DE PLUIE", C["accent_cyan"])
         self.g_pluie.pack(fill="x", pady=(8, 0))
 
-        # Carte inférieure gauche : Contrôles Relais matériels
+        # Carte inférieure gauche
         card_ctrl = tk.Frame(left_panel, bg=C["bg_card"], padx=20, pady=18, highlightthickness=1, highlightbackground=C["border"])
         card_ctrl.pack(fill="x")
         
@@ -306,7 +304,7 @@ class PageDashboard(tk.Frame):
         self.sw_ventilo.pack(side="right")
 
 
-        # PANNEAU DROIT : Profils Végétaux (Limité à 3) + Tableau
+        # PANNEAU DROIT
         right_panel = tk.Frame(layout_box, bg=C["bg_main"])
         right_panel.pack(side="right", fill="both", width=420)
         right_panel.pack_propagate(False)
@@ -324,13 +322,14 @@ class PageDashboard(tk.Frame):
         
         self.tree = ttk.Treeview(card_table, columns=("date", "t", "ha", "hs", "p"), show="headings", selectmode="none")
         self.tree.pack(fill="both", expand=True)
+        
         # STRICTION : Première colonne renommée strictement en "DATE"
         for col, head, w in [("date", "DATE", 130), ("t", "TEMP", 60), ("ha", "AIR %", 60), ("hs", "SOL %", 60), ("p", "RAIN", 50)]:
             self.tree.heading(col, text=head)
             self.tree.column(col, width=w, anchor="center")
 
 
-        # ZONE BASSE : Moniteur système (Terminal) sur toute la largeur
+        # ZONE BASSE : Terminal
         f_term = tk.Frame(self, bg=C["bg_card"], height=160, padx=20, pady=12, highlightthickness=1, highlightbackground=C["border"])
         f_term.pack(fill="x", side="bottom", padx=20, pady=(0, 20))
         f_term.pack_propagate(False)
@@ -341,7 +340,8 @@ class PageDashboard(tk.Frame):
         
         tk.Button(lbl_head, text="FLUSH LOGS", font=("Consolas", 8, "bold"), bg=C["bg_input"], fg=C["accent_cyan"], relief="flat", bd=0, cursor="hand2", command=self._flush_terminal).pack(side="right")
         
-        self.terminal = tk.Text(f_term, bg=C["console_bg"], fg=C["text_main"], font=("Consolas", 9), relief="flat", bd=0, state="disabled", wrap="char")
+        # FIX : Taille de police modifiée de 8.5 à 8 (entier strict pour Python 3.13)
+        self.terminal = tk.Text(f_term, bg=C["console_bg"], fg=C["text_main"], font=("Consolas", 8), relief="flat", bd=0, state="disabled", wrap="char")
         self.terminal.pack(fill="both", expand=True)
         
         self.terminal.tag_configure("INF", foreground=C["accent_cyan"])
@@ -356,7 +356,6 @@ class PageDashboard(tk.Frame):
         for w in self.card_plants.winfo_children(): w.destroy()
         
         total_p = len(self.plantes)
-        # Compteur requis (X/3) dynamique
         tk.Label(self.card_plants, text=f"VEGETAL PROFILES MASTER ({total_p}/3)", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_main"]).pack(anchor="w", pady=(0, 12))
 
         if total_p < 3:
@@ -390,7 +389,7 @@ class PageDashboard(tk.Frame):
         self._write_log("INF", f"Régulation basculée sur la cible : {p['nom'].upper()}")
 
     def _delete_plante(self, p):
-        if not messagebox.askyesno("Confirm", "Effacer définitivement ce profil vÉgÉtal ?"): return
+        if not messagebox.askyesno("Confirm", "Effacer définitivement ce profil végétal ?"): return
         try:
             conn = get_db(); cur = conn.cursor()
             cur.execute("DELETE FROM plantes WHERE uid=%s AND nom=%s", (self.uid, p["nom"]))
@@ -463,7 +462,6 @@ class PageDashboard(tk.Frame):
         s = d.get("humidite_sol", 0.0)
         p = d.get("pluie", False)
 
-        # Remplissage des jauges linéaires horizontales
         self.g_temp.set_value(t)
         self.g_hum.set_value(h)
         self.g_sol.set_value(s)
@@ -484,7 +482,7 @@ class PageDashboard(tk.Frame):
                 if not self.pompe_on:
                     self.sw_pompe.set_state(True)
                     self._api_pompe(True, manuel=True)
-                    self._write_log("WRN", f"HydromÉtrie critique ({s}% < {self.plante_active['eau_min']}%). Injection d'eau requise.")
+                    self._write_log("WRN", f"Hydrométrie critique ({s}% < {self.plante_active['eau_min']}%). Injection d'eau requise.")
             elif s >= self.plante_active["eau_min"] + 10:
                 if self.pompe_on:
                     self.sw_pompe.set_state(False)
@@ -494,7 +492,7 @@ class PageDashboard(tk.Frame):
                 if not self.ventilo_on:
                     self.sw_ventilo.set_state(True)
                     self._api_ventilo(True, manuel=True)
-                    self._write_log("ERR", f"Surchauffe thermique ({t}°C > {self.plante_active['temp_max']}°C). DÉclenchement extracteur d'air.")
+                    self._write_log("ERR", f"Surchauffe thermique ({t}°C > {self.plante_active['temp_max']}°C). Déclenchement extracteur d'air.")
             elif t <= self.plante_active["temp_max"] - 2:
                 if self.ventilo_on:
                     self.sw_ventilo.set_state(False)
@@ -535,7 +533,7 @@ class App:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Nexus Ecosystem Core")
-        self.root.geometry("1260(x)860")
+        # FIX : Format géométrie nettoyé de tout caractère parasite
         self.root.geometry("1260x860")
         self.root.configure(bg=C["bg_main"])
         self.root.resizable(False, False)
