@@ -44,25 +44,18 @@ def sauvegarder_config(email, password):
 def connect_firebase():
     config = charger_config()
     if config:
-        print(f"=== Utilisateur connecté : {config['email']} ===")
-        choix = input("Changer d'utilisateur ? (o/n) : ").strip().lower()
-        if choix == 'o':
-            os.remove(CONFIG_FILE)
-            config = None
-
-    if not config:
-        print("=== Connexion ===")
+        print(f"=== Utilisateur connecte : {config['email']} ===")
+    else:
+        print("=== Premiere connexion ===")
         email    = input("Email    : ")
         password = input("Password : ")
         sauvegarder_config(email, password)
-    else:
-        email    = config["email"]
-        password = config["password"]
-
+        config = {"email": email, "password": password}
     try:
-        user = auth_fb.sign_in_with_email_and_password(email, password)
+        user = auth_fb.sign_in_with_email_and_password(
+            config["email"], config["password"])
         uid  = user["localId"]
-        print(f"[Firebase] Connecte : {email}")
+        print(f"[Firebase] Connecte : {config['email']}")
         return uid
     except Exception as e:
         print(f"[Firebase] Erreur: {e}")
@@ -72,26 +65,24 @@ def connect_firebase():
 def reset_commandes_firebase(uid):
     try:
         db.child("commandes").child(uid).set({
-            "pompe":       False,
-            "ventilateur": False,
-            "auto":        False   # ← mode auto désactivé par défaut
+            "pompe":        False,
+            "ventilateur":  False,
+            "auto":         False
         })
         print("[Firebase] Commandes remises a zero")
     except Exception as e:
-        print(f"[Firebase] Erreur reset commandes: {e}")
+        print(f"[Firebase] Erreur reset: {e}")
 
-def envoyer_firebase(uid, temp, hum, sol, pluie, etat_pompe, etat_ventilo, mode_auto, plante_active):
+def envoyer_firebase(uid, temp, hum, sol, pluie, etat_pompe, etat_ventilo):
     try:
         data = {
-            "temperature":   temp  if temp is not None else 0,
-            "humidite_air":  hum   if hum  is not None else 0,
-            "humidite_sol":  sol   if sol  is not None else 0,
-            "pluie":         bool(pluie),
-            "pompe":         etat_pompe   == "ON",
-            "ventilateur":   etat_ventilo == "ON",
-            "mode_auto":     mode_auto,
-            "plante_active": plante_active if plante_active else "aucune",
-            "timestamp":     time.strftime("%Y-%m-%d %H:%M:%S")
+            "temperature":  temp  if temp is not None else 0,
+            "humidite_air": hum   if hum  is not None else 0,
+            "humidite_sol": sol   if sol  is not None else 0,
+            "pluie":        bool(pluie),
+            "pompe":        etat_pompe   == "ON",
+            "ventilateur":  etat_ventilo == "ON",
+            "timestamp":    time.strftime("%Y-%m-%d %H:%M:%S")
         }
         db.child("capteurs").child(uid).set(data)
         print("[Firebase] Donnees envoyees OK")
@@ -107,29 +98,15 @@ def lire_commandes_firebase(uid):
         return {}
 
 def lire_plante_active(uid):
-    """
-    Retourne les seuils de la plante sélectionnée ou None.
-    Structure Firebase attendue :
-    plantes/{uid}/{nom_plante} : {
-        "seuil_humidite_air": 60,
-        "seuil_humidite_sol": 35,
-        "seuil_temperature":  25,
-        "selectionnee": true    ← une seule plante a ce champ à true
-    }
-    """
+    """Retourne (mode_auto, plante_dict ou None)"""
     try:
-        plantes = db.child("plantes").child(uid).get().val()
-        if not plantes:
-            return None, None
-
-        for nom, data in plantes.items():
-            if isinstance(data, dict) and data.get("selectionnee", False):
-                return nom, data
-
-        return None, None
+        cmds   = db.child("commandes").child(uid).get().val() or {}
+        mode_auto = bool(cmds.get("auto", False))
+        plante = db.child("plantes_actives").child(uid).get().val()
+        return mode_auto, plante
     except Exception as e:
-        print(f"[Firebase] Erreur lecture plantes: {e}")
-        return None, None
+        print(f"[Firebase] Erreur lecture plante: {e}")
+        return False, None
 
 # ─── Matériel ─────────────────────────────────────────────
 lcd = CharLCD('PCF8574', 0x27, cols=16, rows=2)
@@ -161,19 +138,15 @@ firebase_counter = 0
 
 cmd_pompe_manuelle   = None
 cmd_ventilo_manuelle = None
-mode_auto            = False   # ← mode auto
-
-# Seuils par défaut (utilisés si aucune plante sélectionnée)
-SEUIL_SOL_DEFAULT  = 30
-SEUIL_TEMP_DEFAULT = 30
-SEUIL_HUM_DEFAULT  = 70
+mode_auto            = False
+plante_active        = None
 
 # ─── Connexion Firebase ───────────────────────────────────
 uid = connect_firebase()
 if uid:
     reset_commandes_firebase(uid)
 else:
-    print("[WARN] Mode local uniquement (pas de Firebase)")
+    print("[WARN] Mode local uniquement")
 
 # ─── Boucle principale ────────────────────────────────────
 try:
@@ -205,70 +178,54 @@ try:
             pourcentage_sol = sol_last
             pluie           = pluie_last
 
-        # ── Lecture commandes + mode auto depuis Firebase ─
+        # ── Lecture commandes + plante depuis Firebase ───
         if uid:
             cmds = lire_commandes_firebase(uid)
-            mode_auto = bool(cmds.get("auto", False))
+            mode_auto, plante_active = lire_plante_active(uid)
 
             if not mode_auto:
-                # Mode manuel : on lit les commandes manuelles
+                # Mode manuel → lire boutons Tkinter
                 if "pompe" in cmds:
                     cmd_pompe_manuelle = bool(cmds["pompe"])
                 if "ventilateur" in cmds:
                     cmd_ventilo_manuelle = bool(cmds["ventilateur"])
             else:
-                # Mode auto : on ignore les commandes manuelles
+                # Mode auto → ignorer boutons manuels
                 cmd_pompe_manuelle   = None
                 cmd_ventilo_manuelle = None
 
-        # ── Lecture plante sélectionnée ──────────────────
-        plante_nom, plante_data = None, None
-        if uid and mode_auto:
-            plante_nom, plante_data = lire_plante_active(uid)
-
-        # ── Récupération des seuils ──────────────────────
-        if plante_data:
-            seuil_sol  = plante_data.get("seuil_humidite_sol", SEUIL_SOL_DEFAULT)
-            seuil_temp = plante_data.get("seuil_temperature",  SEUIL_TEMP_DEFAULT)
-            seuil_hum  = plante_data.get("seuil_humidite_air", SEUIL_HUM_DEFAULT)
+        # ── Récupérer seuils plante active ───────────────
+        if plante_active:
+            seuil_sol  = plante_active.get("eau_min",       30)
+            seuil_hum  = plante_active.get("humidite_min",  60)
+            seuil_temp = plante_active.get("temp_max",       30)
         else:
-            seuil_sol  = SEUIL_SOL_DEFAULT
-            seuil_temp = SEUIL_TEMP_DEFAULT
-            seuil_hum  = SEUIL_HUM_DEFAULT
+            seuil_sol  = 30
+            seuil_hum  = 60
+            seuil_temp = 30
 
         # ── Gestion Pompe ────────────────────────────────
-        if mode_auto:
-            # Auto : pompe si sol sec et pas de pluie
-            if pourcentage_sol is not None and pourcentage_sol < seuil_sol and not pluie:
+        if cmd_pompe_manuelle is not None:
+            pompe.value = cmd_pompe_manuelle
+            etat_pompe  = "ON" if cmd_pompe_manuelle else "OFF"
+        else:
+            if (pourcentage_sol is not None and
+                    pourcentage_sol < seuil_sol and not pluie):
                 pompe.value = True
                 etat_pompe  = "ON"
             else:
                 pompe.value = False
                 etat_pompe  = "OFF"
-        else:
-            # Manuel
-            if cmd_pompe_manuelle is not None:
-                pompe.value = cmd_pompe_manuelle
-                etat_pompe  = "ON" if cmd_pompe_manuelle else "OFF"
-            else:
-                pompe.value = False
-                etat_pompe  = "OFF"
 
         # ── Gestion Ventilateur ──────────────────────────
-        if mode_auto:
-            # Auto : ventilo si humidité trop haute OU température trop haute
-            ventilo_on = False
-            if hum  is not None and hum  > seuil_hum:
-                ventilo_on = True
-            if temp is not None and temp > seuil_temp:
-                ventilo_on = True
-            ventilateur.value = ventilo_on
-            etat_ventilo      = "ON" if ventilo_on else "OFF"
+        if cmd_ventilo_manuelle is not None:
+            ventilateur.value = cmd_ventilo_manuelle
+            etat_ventilo      = "ON" if cmd_ventilo_manuelle else "OFF"
         else:
-            # Manuel
-            if cmd_ventilo_manuelle is not None:
-                ventilateur.value = cmd_ventilo_manuelle
-                etat_ventilo      = "ON" if cmd_ventilo_manuelle else "OFF"
+            if ((hum  is not None and hum  > seuil_hum) or
+                    (temp is not None and temp > seuil_temp)):
+                ventilateur.value = True
+                etat_ventilo      = "ON"
             else:
                 ventilateur.value = False
                 etat_ventilo      = "OFF"
@@ -285,22 +242,20 @@ try:
         firebase_counter += 1
         if uid and firebase_counter >= 3:
             envoyer_firebase(uid, temp, hum, pourcentage_sol,
-                             pluie, etat_pompe, etat_ventilo,
-                             mode_auto, plante_nom)
+                              pluie, etat_pompe, etat_ventilo)
             firebase_counter = 0
 
         # ── Print console ────────────────────────────────
-        print("=" * 35)
-        print(f"Mode    : {'AUTO' if mode_auto else 'MANUEL'}")
-        print(f"Plante  : {plante_nom if plante_nom else 'aucune'}")
-        print(f"Seuils  : Sol<{seuil_sol}% | Hum>{seuil_hum}% | Temp>{seuil_temp}C")
+        nom_plante = plante_active["nom"] if plante_active else "aucune"
+        print("=" * 30)
+        print(f"Mode    : {'AUTO' if mode_auto else 'MANUEL'} ({nom_plante})")
         print(f"Temp    : {temp}C"            if temp            else "Temp    : --")
         print(f"Humidite: {hum}%"             if hum             else "Humidite: --")
         print(f"Sol     : {pourcentage_sol}%" if pourcentage_sol else "Sol     : --")
         print(f"Pluie   : {'OUI' if pluie else 'NON'}")
         print(f"Pompe   : {etat_pompe}")
         print(f"Ventilo : {etat_ventilo}")
-        print("=" * 35)
+        print("=" * 30)
 
         # ── LCD ──────────────────────────────────────────
         lcd.clear()
@@ -315,10 +270,9 @@ try:
         elif ecran == 2:
             lcd.write_string(f"P:{etat_pompe} V:{etat_ventilo}")
             lcd.cursor_pos = (1, 0)
-            # Affiche la plante active ou le mode
             lcd.write_string(
-                f"{'AUTO' if mode_auto else 'MAN'} {plante_nom[:8] if plante_nom else 'aucune'}"
-            )
+                f"{'AUTO' if mode_auto else 'MAN'} "
+                f"{nom_plante[:8] if plante_active else 'aucune'}")
 
         ecran = (ecran + 1) % 3
         time.sleep(2)
