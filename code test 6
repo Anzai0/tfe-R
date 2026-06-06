@@ -20,84 +20,80 @@ firebase = pyrebase.initialize_app(firebase_config)
 auth = firebase.auth()
 db = firebase.database()
 
-# --- PALETTE DE COULEURS UNIQUE (CYBER-TECH PREMIUM) ---
+# --- PALETTE DE COULEURS UNIQUE (DASHBOARD ECOSPHERE PRO) ---
 C = {
-    "bg_main":      "#0B0F19",  # Fond général ultra sombre
-    "bg_card":      "#161B26",  # Fond des cartes technologiques
-    "bg_input":     "#212936",  # Champs de saisie
-    "text_main":    "#F1F5F9",  # Texte principal blanc éclatant
-    "text_muted":   "#64748B",  # Texte secondaire
-    "accent_cyan":  "#06B6D4",  # Cyan électrique
-    "accent_green": "#10B981",  # Vert néon
-    "accent_amber": "#F59E0B",  # Ambre / Orange
-    "accent_red":   "#EF4444",  # Rouge alerte
-    "border":       "#243042",  # Bordures fines high-tech
-    "console_bg":   "#05070B"   # Fond console
+    "bg_main":      "#111827",  # Fond principal sombre
+    "bg_card":      "#1F2937",  # Fond des blocs (Cartes)
+    "bg_input":     "#374151",  # Fond des inputs / boutons OFF
+    "text_main":    "#FFFFFF",  # Texte principal blanc
+    "text_muted":   "#9CA3AF",  # Texte secondaire gris clair
+    "accent_blue":  "#3B82F6",  # Bleu Température
+    "accent_green": "#10B981",  # Vert Humidité Air
+    "accent_amber": "#F59E0B",  # Orange Humidité Sol
+    "accent_red":   "#EF4444",  # Rouge Alerte / Déconnexion
+    "border":       "#2B3544",  # Bordures fines des cartes
+    "console_bg":   "#030712"   # Fond noir du moniteur de flux
 }
 
-# --- COMPOSANT : BARRE DE PROGRESSION EN LIGNE DESIGN ---
-class LinearTechGauge(tk.Frame):
-    def __init__(self, parent, label="CAPTEUR", unit="", max_val=100, color="#06B6D4"):
-        super().__init__(parent, bg=C["bg_card"], bd=0)
+# --- COMPOSANT : JAUGE CIRCULAIRE EXACTE DU CODE 1 ---
+class CircularGauge(tk.Canvas):
+    def __init__(self, parent, label="CAPTEUR", unit="", max_val=100, color="#3B82F6"):
+        super().__init__(parent, width=150, height=150, bg=C["bg_card"], bd=0, highlightthickness=0)
         self.label = label
         self.unit = unit
         self.max_val = max_val
         self.color = color
         self.value = 0.0
+        self._draw()
+
+    def _draw(self):
+        self.delete("all")
+        # Arc de fond (Gris)
+        self.create_arc(15, 15, 135, 135, start=90, extent=-359, style="arc", outline="#2F3947", width=10)
         
-        self.lbl_title = tk.Label(self, text=self.label, font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"])
-        self.lbl_title.pack(anchor="w")
+        # Calcul de l'angle de remplissage
+        pct = max(0.0, min(1.0, self.value / self.max_val)) if self.max_val > 0 else 0
+        extent_angle = -(pct * 359.9)
         
-        self.lbl_val = tk.Label(self, text=f"0.0 {self.unit}", font=("Consolas", 18, "bold"), bg=C["bg_card"], fg=C["text_main"])
-        self.lbl_val.pack(anchor="w", pady=(2, 5))
+        # Arc de valeur (Couleur)
+        if abs(extent_angle) > 1:
+            self.create_arc(15, 15, 135, 135, start=90, extent=extent_angle, style="arc", outline=self.color, width=10)
         
-        self.canvas = tk.Canvas(self, height=8, bg=C["bg_input"], bd=0, highlightthickness=0)
-        self.canvas.pack(fill="x", pady=2)
-        
+        # Textes centraux et inférieurs
+        self.create_text(75, 70, text=f"{self.value} {self.unit}", fill=C["text_main"], font=("Segoe UI", 16, "bold"))
+        self.create_text(75, 115, text=self.label, fill=C["text_muted"], font=("Segoe UI", 8, "bold"))
+
     def set_value(self, val):
         self.value = val
-        self.lbl_val.configure(text=f"{val} {self.unit}")
-        self.canvas.delete("all")
-        
-        self.update_idletasks()
-        w = self.canvas.winfo_width()
-        pct = max(0.0, min(1.0, self.value / self.max_val)) if self.max_val > 0 else 0
-        
-        if w > 1:
-            self.canvas.create_rectangle(0, 0, int(w * pct), 8, fill=self.color, outline="")
+        self._draw()
 
-# --- COMPOSANT : INDICATEUR DE PLUIE DIGITAL ---
-class DigitalRainWidget(tk.Frame):
-    def __init__(self, parent, label="MONITEUR PLUIE", color="#06B6D4"):
-        super().__init__(parent, bg=C["bg_card"], bd=0)
+# --- COMPOSANT : INDICATEUR DE PLUIE CIRCULAIRE DU CODE 1 ---
+class CircularRainWidget(tk.Canvas):
+    def __init__(self, parent, label="ÉTAT PLUIE"):
+        super().__init__(parent, width=150, height=150, bg=C["bg_card"], bd=0, highlightthickness=0)
         self.label = label
-        self.color = color
+        self.is_raining = False
+        self._draw()
+
+    def _draw(self):
+        self.delete("all")
+        # Couleur du disque central selon l'état de la pluie
+        circle_color = C["accent_red"] if self.is_raining else C["bg_input"]
         
-        tk.Label(self, text=self.label, font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w")
+        # Grand bouton/disque central
+        self.create_oval(15, 15, 135, 135, fill=circle_color, outline="")
         
-        self.box_status = tk.Frame(self, bg=C["bg_input"], highlightthickness=1, highlightbackground=C["border"], padx=15, pady=8)
-        self.box_status.pack(fill="x", pady=(8, 0))
-        
-        self.lbl_status = tk.Label(self.box_status, text="NON", font=("Segoe UI", 16, "bold"), bg=C["bg_input"], fg=C["text_main"])
-        self.lbl_status.pack(side="left")
-        
-        self.led = tk.Canvas(self.box_status, width=12, height=12, bg=C["bg_input"], bd=0, highlightthickness=0)
-        self.led.pack(side="right", padx=5)
-        self.set_status(False)
+        # Textes
+        self.create_text(75, 70, text="OUI" if self.is_raining else "NON", fill=C["text_main"], font=("Segoe UI", 18, "bold"))
+        self.create_text(75, 115, text=self.label, fill=C["text_muted"], font=("Segoe UI", 8, "bold"))
 
     def set_status(self, is_raining):
-        if is_raining:
-            self.lbl_status.configure(text="OUI", fg="#FFFFFF")
-            self.led.delete("all")
-            self.led.create_oval(1, 1, 11, 11, fill=self.color, outline="")
-        else:
-            self.lbl_status.configure(text="NON", fg=C["text_muted"])
-            self.led.delete("all")
-            self.led.create_oval(1, 1, 11, 11, fill="#374151", outline="")
+        self.is_raining = is_raining
+        self._draw()
 
-# --- COMPOSANT : BOUTON SWITCH FUTURISTE ---
+# --- COMPOSANT : BOUTON SWITCH DU CODE 1 ---
 class CustomToggle(tk.Canvas):
-    def __init__(self, parent, command=None, width=60, height=22):
+    def __init__(self, parent, command=None, width=55, height=24):
         super().__init__(parent, width=width, height=height, bg=C["bg_card"], bd=0, highlightthickness=0, cursor="hand2")
         self.command = command
         self.state = False
@@ -108,11 +104,19 @@ class CustomToggle(tk.Canvas):
 
     def _draw(self):
         self.delete("all")
-        bg_col = C["accent_cyan"] if self.state else C["bg_input"]
-        self.create_rectangle(0, 0, self.width, self.height, fill=bg_col, outline=C["border"])
+        bg_col = C["accent_blue"] if self.state else C["bg_input"]
+        # Dessin du fond arrondi simplifié
+        self.create_rectangle(0, 0, self.width, self.height, fill=bg_col, outline="")
         
-        x_pos = (self.width - 18) if self.state else 2
-        self.create_rectangle(x_pos, 2, x_pos + 16, self.height - 2, fill="#FFFFFF", outline="")
+        # Curseur rond blanc
+        x_pos = (self.width - 20) if self.state else 4
+        self.create_oval(x_pos, 3, x_pos + 16, self.height - 3, fill="#FFFFFF", outline="")
+        
+        # Label textuel interne (ON/OFF)
+        text_str = "ON" if self.state else "OFF"
+        text_col = C["text_main"] if self.state else C["text_muted"]
+        text_x = 16 if self.state else 38
+        self.create_text(text_x, self.height // 2, text=text_str, fill=text_col, font=("Segoe UI", 8, "bold"))
 
     def _toggle(self, event):
         self.state = not self.state
@@ -144,13 +148,13 @@ def init_db():
         print(f"Erreur Init BDD: {e}")
 
 def ui_entry(e):
-    e.configure(bg=C["bg_input"], fg=C["text_main"], insertbackground=C["accent_cyan"], relief="flat", bd=0, font=("Segoe UI", 10), highlightthickness=1, highlightbackground=C["border"], highlightcolor=C["accent_cyan"])
+    e.configure(bg=C["bg_input"], fg=C["text_main"], insertbackground=C["accent_blue"], relief="flat", bd=0, font=("Segoe UI", 10), highlightthickness=1, highlightbackground=C["border"], highlightcolor=C["accent_blue"])
 
 def ui_btn(b, bg=None, fg=None):
-    b.configure(bg=bg or C["accent_cyan"], fg=fg or C["bg_main"], relief="flat", bd=0, font=("Segoe UI", 9, "bold"), cursor="hand2", activebackground=bg or C["accent_cyan"], activeforeground=fg or C["bg_main"])
+    b.configure(bg=bg or C["accent_blue"], fg=fg or C["text_main"], relief="flat", bd=0, font=("Segoe UI", 9, "bold"), cursor="hand2", activebackground=bg or C["accent_blue"], activeforeground=fg or C["text_main"])
 
 
-# --- ENTRÉE : AUTHENTIFICATION ---
+# --- PAGE D'ACCUEIL / CONNEXION (RETOUR AU LOOK DU CODE 1) ---
 class PageConnexion(tk.Frame):
     def __init__(self, parent, on_conn):
         super().__init__(parent, bg=C["bg_main"])
@@ -162,24 +166,24 @@ class PageConnexion(tk.Frame):
         f = tk.Frame(self, bg=C["bg_card"], padx=40, pady=40, highlightthickness=1, highlightbackground=C["border"])
         f.place(relx=0.5, rely=0.5, anchor="center", width=420)
 
-        self.title = tk.Label(f, text="CORE ACCESS", font=("Segoe UI", 20, "bold"), bg=C["bg_card"], fg=C["text_main"])
+        self.title = tk.Label(f, text="CONNEXION SYSTÈME", font=("Segoe UI", 18, "bold"), bg=C["bg_card"], fg=C["text_main"])
         self.title.pack(anchor="w", pady=(0, 25))
 
-        tk.Label(f, text="OPERATOR EMAIL", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w")
+        tk.Label(f, text="ADRESSE EMAIL", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w")
         self.e_email = tk.Entry(f)
         ui_entry(self.e_email)
         self.e_email.pack(fill="x", pady=(5, 15), ipady=6)
 
-        tk.Label(f, text="ACCESS KEY / PASSWORD", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w")
+        tk.Label(f, text="MOT DE PASSE", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w")
         self.e_mdp = tk.Entry(f, show="*")
         ui_entry(self.e_mdp)
         self.e_mdp.pack(fill="x", pady=(5, 25), ipady=6)
 
-        self.btn_sub = tk.Button(f, text="CONNECT SYSTEM", command=self._action)
+        self.btn_sub = tk.Button(f, text="SE CONNECTER", command=self._action)
         ui_btn(self.btn_sub)
         self.btn_sub.pack(fill="x", ipady=8, pady=(0, 15))
 
-        self.btn_sw = tk.Button(f, text="Create an operator account", bg=C["bg_card"], fg=C["text_muted"], bd=0, font=("Segoe UI", 9, "underline"), cursor="hand2", command=self._toggle)
+        self.btn_sw = tk.Button(f, text="Créer un compte utilisateur", bg=C["bg_card"], fg=C["text_muted"], bd=0, font=("Segoe UI", 9, "underline"), cursor="hand2", command=self._toggle)
         self.btn_sw.pack()
 
         self.lbl_err = tk.Label(f, text="", font=("Segoe UI", 9), bg=C["bg_card"], fg=C["accent_red"])
@@ -188,12 +192,14 @@ class PageConnexion(tk.Frame):
     def _toggle(self):
         if self.mode == "connexion":
             self.mode = "inscription"
-            self.title.configure(text="REGISTRATION")
-            self.btn_sw.configure(text="Back to log-in")
+            self.title.configure(text="INSCRIPTION SYSTÈME")
+            self.btn_sw.configure(text="Retour à la connexion")
+            self.btn_sub.configure(text="S'INSCRIRE")
         else:
             self.mode = "connexion"
-            self.title.configure(text="CORE ACCESS")
-            self.btn_sw.configure(text="Create an operator account")
+            self.title.configure(text="CONNEXION SYSTÈME")
+            self.btn_sw.configure(text="Créer un compte utilisateur")
+            self.btn_sub.configure(text="SE CONNECTER")
 
     def _action(self):
         e, m = self.e_email.get().strip(), self.e_mdp.get().strip()
@@ -203,11 +209,11 @@ class PageConnexion(tk.Frame):
                 u = auth.sign_in_with_email_and_password(e, m) if self.mode == "connexion" else auth.create_user_with_email_and_password(e, m)
                 self.after(0, lambda: self.on_conn(u["localId"], e))
             except:
-                self.after(0, lambda: self.lbl_err.configure(text="ERROR: Access Denied."))
+                self.after(0, lambda: self.lbl_err.configure(text="ERREUR: Identifiants invalides ou refusés."))
         threading.Thread(target=run, daemon=True).start()
 
 
-# --- ESPACE DE CONTRÔLE CENTRAL (DASHBOARD) ---
+# --- ESPACE DE CONTRÔLE CENTRAL (DASHBOARD COMPLET DU CODE 1 EXCLUSIF BUGS) ---
 class PageDashboard(tk.Frame):
     def __init__(self, parent, uid, email, on_deconn):
         super().__init__(parent, bg=C["bg_main"])
@@ -229,7 +235,7 @@ class PageDashboard(tk.Frame):
         s = ttk.Style()
         s.theme_use("default")
         s.configure("Treeview", background=C["bg_card"], foreground=C["text_main"], fieldbackground=C["bg_card"], rowheight=28, bd=0, font=("Segoe UI", 9))
-        s.map("Treeview", background=[("selected", C["bg_input"])], foreground=[("selected", C["accent_cyan"])])
+        s.map("Treeview", background=[("selected", C["bg_input"])], foreground=[("selected", C["accent_blue"])])
         s.configure("Treeview.Heading", background=C["bg_input"], foreground=C["text_main"], relief="flat", font=("Segoe UI", 9, "bold"))
 
     def _charger_plantes(self):
@@ -242,16 +248,17 @@ class PageDashboard(tk.Frame):
         if self.plantes: self.plante_active = self.plantes[0]
 
     def _build_interface(self):
+        # 1. BARRE DE NAVIGATION SUPÉRIEURE (Texte d'origine)
         top_bar = tk.Frame(self, bg=C["bg_card"], height=55, padx=20, highlightthickness=1, highlightbackground=C["border"])
         top_bar.pack(fill="x")
         top_bar.pack_propagate(False)
         
-        tk.Label(top_bar, text="🟢 ECOSPHERE // NEXUS OPERATING SYSTEM", font=("Segoe UI", 11, "bold"), bg=C["bg_card"], fg=C["accent_cyan"]).pack(side="left")
+        tk.Label(top_bar, text="GREENHOUSE // CORE OS", font=("Segoe UI", 12, "bold"), bg=C["bg_card"], fg=C["accent_green"]).pack(side="left")
         
-        btn_out = tk.Button(top_bar, text="DISCONNECT", command=self.on_deconn, padx=12, pady=4)
-        ui_btn(btn_out, bg=C["accent_red"], fg=C["text_main"])
+        btn_out = tk.Button(top_bar, text="DÉCONNEXION SYSTEM", command=self.on_deconn, padx=12, pady=4)
+        ui_btn(btn_out, bg=C["accent_red"])
         btn_out.pack(side="right", padx=(15, 0))
-        tk.Label(top_bar, text=f"SYS_OPERATOR: {self.email.upper()}", font=("Consolas", 9), bg=C["bg_card"], fg=C["text_muted"]).pack(side="right")
+        tk.Label(top_bar, text=f"OPERATOR : {self.email.upper()}", font=("Segoe UI", 9), bg=C["bg_card"], fg=C["accent_blue"]).pack(side="right")
 
         layout_box = tk.Frame(self, bg=C["bg_main"], padx=20, pady=20)
         layout_box.pack(fill="both", expand=True)
@@ -260,121 +267,131 @@ class PageDashboard(tk.Frame):
         left_panel = tk.Frame(layout_box, bg=C["bg_main"])
         left_panel.pack(side="left", fill="both", expand=True, padx=(0, 15))
 
+        # Carte Données en Temps Réel (Avec les vrais cercles)
         card_caps = tk.Frame(left_panel, bg=C["bg_card"], padx=20, pady=20, highlightthickness=1, highlightbackground=C["border"])
         card_caps.pack(fill="x", pady=(0, 15))
         
-        tk.Label(card_caps, text="SYSTEM TELEMETRY - SENSORS", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_main"]).pack(anchor="w", pady=(0, 15))
+        tk.Label(card_caps, text="DONNÉES EN TEMPS RÉEL", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 15))
         
-        self.g_temp = LinearTechGauge(card_caps, "TEMPERATURE GENERALE", "°C", 50, C["accent_cyan"])
-        self.g_temp.pack(fill="x", pady=8)
-        
-        self.g_hum = LinearTechGauge(card_caps, "HUMIDITE ATMOSPHERIQUE", "%", 100, C["accent_green"])
-        self.g_hum.pack(fill="x", pady=8)
-        
-        self.g_sol = LinearTechGauge(card_caps, "INDICE HYDROLOGIQUE DU SOL", "%", 100, C["accent_amber"])
-        self.g_sol.pack(fill="x", pady=8)
+        # Conteneur horizontal pour aligner les 4 jauges rondes du Code 1
+        gauge_container = tk.Frame(card_caps, bg=C["bg_card"])
+        gauge_container.pack(fill="x", anchor="center")
 
-        self.g_pluie = DigitalRainWidget(card_caps, "DETECTEUR DE PLUIE", C["accent_cyan"])
-        self.g_pluie.pack(fill="x", pady=(8, 0))
+        self.g_temp = CircularGauge(gauge_container, "TEMPÉRATURE ATMOSPHÈRE", "°C", 50, C["accent_blue"])
+        self.g_temp.pack(side="left", expand=True, padx=5)
+        
+        self.g_hum = CircularGauge(gauge_container, "HUMIDITÉ DE L'AIR", "%", 100, C["accent_green"])
+        self.g_hum.pack(side="left", expand=True, padx=5)
+        
+        self.g_sol = CircularGauge(gauge_container, "HUMIDITÉ SOL", "%", 100, C["accent_amber"])
+        self.g_sol.pack(side="left", expand=True, padx=5)
 
+        self.g_pluie = CircularRainWidget(gauge_container, "ÉTAT PLUIE")
+        self.g_pluie.pack(side="left", expand=True, padx=5)
+
+        # Carte Actionneurs Matériels (Noms exacts du Code 1)
         card_ctrl = tk.Frame(left_panel, bg=C["bg_card"], padx=20, pady=18, highlightthickness=1, highlightbackground=C["border"])
         card_ctrl.pack(fill="x")
         
-        tk.Label(card_ctrl, text="ACTUATOR MATRIX OVERRIDE", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_main"]).pack(anchor="w", pady=(0, 15))
+        tk.Label(card_ctrl, text="RELAIS ET ACTIONNEURS MATÉRIELS", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 15))
         
         r1 = tk.Frame(card_ctrl, bg=C["bg_card"])
-        r1.pack(fill="x", pady=5)
-        tk.Label(r1, text="SERVOMOTEUR / POMPE COMPACTE", font=("Segoe UI", 9), bg=C["bg_card"], fg=C["text_main"]).pack(side="left")
+        r1.pack(fill="x", pady=6)
+        tk.Label(r1, text="POMPE À EAU EXT.", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_main"]).pack(side="left")
         self.sw_pompe = CustomToggle(r1, command=self._api_pompe)
         self.sw_pompe.pack(side="right")
 
         r2 = tk.Frame(card_ctrl, bg=C["bg_card"])
-        r2.pack(fill="x", pady=5)
-        tk.Label(r2, text="VENTILATEUR EXTRACTEUR D'AIR", font=("Segoe UI", 9), bg=C["bg_card"], fg=C["text_main"]).pack(side="left")
+        r2.pack(fill="x", pady=6)
+        tk.Label(r2, text="SYS. VENTILATION", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_main"]).pack(side="left")
         self.sw_ventilo = CustomToggle(r2, command=self._api_ventilo)
         self.sw_ventilo.pack(side="right")
 
-        # PANNEAU DROIT (Correction de l'attribution de width ici)
+
+        # PANNEAU DROIT (Correction définitive du crash - width appliqué sur le constructeur)
         right_panel = tk.Frame(layout_box, bg=C["bg_main"], width=420)
         right_panel.pack(side="right", fill="both")
         right_panel.pack_propagate(False)
 
+        # Bloc Profils Végétaux
         self.card_plants = tk.Frame(right_panel, bg=C["bg_card"], padx=20, pady=20, highlightthickness=1, highlightbackground=C["border"])
         self.card_plants.pack(fill="x", pady=(0, 15))
         self._render_plantes_layout()
 
+        # Bloc Statistiques des Capteurs (Noms et colonnes d'origine)
         card_table = tk.Frame(right_panel, bg=C["bg_card"], padx=20, pady=15, highlightthickness=1, highlightbackground=C["border"])
         card_table.pack(fill="both", expand=True)
         
-        tk.Label(card_table, text="LOGGED DATA MATRIX", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_main"]).pack(anchor="w", pady=(0, 10))
+        tk.Label(card_table, text="TABLEAU STATISTIQUE DES CAPTEURS", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 10))
         
         self.tree = ttk.Treeview(card_table, columns=("date", "t", "ha", "hs", "p"), show="headings", selectmode="none")
         self.tree.pack(fill="both", expand=True)
         
-        for col, head, w in [("date", "DATE", 130), ("t", "TEMP", 60), ("ha", "AIR %", 60), ("hs", "SOL %", 60), ("p", "RAIN", 50)]:
+        for col, head, w in [("date", "Horodatage / Date", 130), ("t", "Température", 75), ("ha", "Hum. Air", 60), ("hs", "Hum. Sol", 60), ("p", "Pluie", 50)]:
             self.tree.heading(col, text=head)
             self.tree.column(col, width=w, anchor="center")
 
-        # ZONE BASSE : Terminal
+
+        # ZONE BASSE : Terminal Moniteur de Flux (Intitulés originaux)
         f_term = tk.Frame(self, bg=C["bg_card"], height=160, padx=20, pady=12, highlightthickness=1, highlightbackground=C["border"])
         f_term.pack(fill="x", side="bottom", padx=20, pady=(0, 20))
         f_term.pack_propagate(False)
         
         lbl_head = tk.Frame(f_term, bg=C["bg_card"])
         lbl_head.pack(fill="x", pady=(0, 5))
-        tk.Label(lbl_head, text="LIVE KERNEL TERMINAL MONITORS", font=("Consolas", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(side="left")
+        tk.Label(lbl_head, text="MONITEUR DE FLUX TEMPS RÉEL", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(side="left")
         
-        tk.Button(lbl_head, text="FLUSH LOGS", font=("Consolas", 8, "bold"), bg=C["bg_input"], fg=C["accent_cyan"], relief="flat", bd=0, cursor="hand2", command=self._flush_terminal).pack(side="right")
+        tk.Button(lbl_head, text="EFFACER LE LOG", font=("Segoe UI", 8, "bold"), bg=C["bg_input"], fg=C["text_main"], relief="flat", bd=0, cursor="hand2", command=self._flush_terminal, padx=10).pack(side="right")
         
-        self.terminal = tk.Text(f_term, bg=C["console_bg"], fg=C["text_main"], font=("Consolas", 8), relief="flat", bd=0, state="disabled", wrap="char")
+        self.terminal = tk.Text(f_term, bg=C["console_bg"], fg=C["text_main"], font=("Consolas", 9), relief="flat", bd=0, state="disabled", wrap="char")
         self.terminal.pack(fill="both", expand=True)
         
-        self.terminal.tag_configure("INF", foreground=C["accent_cyan"])
+        self.terminal.tag_configure("INF", foreground=C["accent_blue"])
         self.terminal.tag_configure("OK", foreground=C["accent_green"])
         self.terminal.tag_configure("WRN", foreground=C["accent_amber"])
         self.terminal.tag_configure("ERR", foreground=C["accent_red"])
         self.terminal.tag_configure("MUT", foreground=C["text_muted"])
 
-        self._write_log("INF", "Nexus Core init complet. En attente de flux Firebase...")
+        self._write_log("INF", "Système EcoSphere initialisé. En attente de données...")
 
     def _render_plantes_layout(self):
         for w in self.card_plants.winfo_children(): w.destroy()
         
         total_p = len(self.plantes)
-        tk.Label(self.card_plants, text=f"VEGETAL PROFILES MASTER ({total_p}/3)", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_main"]).pack(anchor="w", pady=(0, 12))
+        tk.Label(self.card_plants, text="GESTION DES PROFILS VEGETAUX", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w", pady=(0, 12))
 
         if total_p < 3:
-            btn_create = tk.Button(self.card_plants, text="+ ADD TARGET PROFILE", command=self._popup_nouvelle_plante)
+            btn_create = tk.Button(self.card_plants, text="+ ENREGISTRER UNE PLANTE", command=self._popup_nouvelle_plante)
             ui_btn(btn_create, bg=C["accent_green"])
-            btn_create.pack(fill="x", pady=(0, 10), ipady=4)
+            btn_create.pack(fill="x", pady=(0, 10), ipady=5)
 
         for p in self.plantes:
             is_monitoring = self.plante_active and self.plante_active["nom"] == p["nom"]
             
-            p_box = tk.Frame(self.card_plants, bg=C["bg_input"] if is_monitoring else C["bg_card"], highlightthickness=1, highlightbackground=C["accent_green"] if is_monitoring else C["border"], padx=12, pady=6)
-            p_box.pack(fill="x", pady=3)
+            p_box = tk.Frame(self.card_plants, bg=C["bg_card"], highlightthickness=1, highlightbackground=C["accent_green"] if is_monitoring else C["border"], padx=12, pady=8)
+            p_box.pack(fill="x", pady=4)
 
-            tk.Label(p_box, text=p["nom"].upper(), font=("Segoe UI", 9, "bold"), bg=p_box.cget("bg"), fg=C["text_main"]).pack(anchor="w")
+            tk.Label(p_box, text=p["nom"].upper(), font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_main"]).pack(anchor="w")
             
-            sub = tk.Frame(p_box, bg=p_box.cget("bg"))
-            sub.pack(fill="x", pady=(4, 0))
+            sub = tk.Frame(p_box, bg=C["bg_card"])
+            sub.pack(fill="x", pady=(5, 0))
 
             if not is_monitoring:
-                b_track = tk.Button(sub, text="ACTIVATE", font=("Segoe UI", 8, "bold"), bg=C["border"], fg=C["text_main"], relief="flat", bd=0, cursor="hand2", command=lambda pl=p: self._select_plante(pl))
-                b_track.pack(side="left", padx=(0, 4))
+                b_track = tk.Button(sub, text="ACTIVER", font=("Segoe UI", 8, "bold"), bg=C["bg_input"], fg=C["text_main"], relief="flat", bd=0, cursor="hand2", command=lambda pl=p: self._select_plante(pl), padx=8, pady=2)
+                b_track.pack(side="left")
             else:
-                tk.Label(sub, text="MONITORED", font=("Segoe UI", 8, "bold"), bg=p_box.cget("bg"), fg=C["accent_green"]).pack(side="left")
+                tk.Label(sub, text="SURVEILLANCE EN COURS", font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["accent_green"]).pack(side="left")
 
-            b_rm = tk.Button(sub, text="DELETE", font=("Segoe UI", 8, "bold"), bg=C["bg_main"], fg=C["accent_red"], relief="flat", bd=0, cursor="hand2", command=lambda pl=p: self._delete_plante(pl))
+            b_rm = tk.Button(sub, text="SUPPRIMER", font=("Segoe UI", 8, "bold"), bg=C["accent_red"], fg=C["text_main"], relief="flat", bd=0, cursor="hand2", command=lambda pl=p: self._delete_plante(pl), padx=8, pady=2)
             b_rm.pack(side="right")
 
     def _select_plante(self, p):
         self.plante_active = p
         self._render_plantes_layout()
-        self._write_log("INF", f"Régulation basculée sur la cible : {p['nom'].upper()}")
+        self._write_log("INF", f"Changement de profil végétal cible : {p['nom'].upper()}")
 
     def _delete_plante(self, p):
-        if not messagebox.askyesno("Confirm", "Effacer définitivement ce profil végétal ?"): return
+        if not messagebox.askyesno("Confirmation", "Supprimer définitivement ce profil végétal ?"): return
         try:
             conn = get_db(); cur = conn.cursor()
             cur.execute("DELETE FROM plantes WHERE uid=%s AND nom=%s", (self.uid, p["nom"]))
@@ -383,7 +400,7 @@ class PageDashboard(tk.Frame):
             if self.plante_active and self.plante_active["nom"] == p["nom"]:
                 self.plante_active = self.plantes[0] if self.plantes else None
             self._render_plantes_layout()
-            self._write_log("WRN", f"Profil supprimé de l'index : {p['nom']}")
+            self._write_log("WRN", f"Profil supprimé : {p['nom']}")
         except: pass
 
     def _popup_nouvelle_plante(self):
@@ -393,11 +410,11 @@ class PageDashboard(tk.Frame):
         pop.resizable(False, False)
         pop.grab_set()
 
-        tk.Label(pop, text="NEW VEGETAL EQUALIZER", font=("Segoe UI", 10, "bold"), bg=C["bg_main"], fg=C["text_main"]).pack(pady=15)
+        tk.Label(pop, text="NOUVEAU PROFIL VÉGÉTAL", font=("Segoe UI", 10, "bold"), bg=C["bg_main"], fg=C["text_main"]).pack(pady=15)
         f = tk.Frame(pop, bg=C["bg_card"], padx=20, pady=20, highlightthickness=1, highlightbackground=C["border"])
         f.pack(fill="both", expand=True, padx=20, pady=(0, 20))
 
-        inputs = [("NOM DU VEGETAL", "nom", ""), ("SEUIL TEMP MAX (°C)", "t_max", "30"), ("SEUIL HYDRIQUE MIN (%)", "e_min", "40")]
+        inputs = [("NOM DE LA PLANTE", "nom", ""), ("SEUIL TEMP MAX (°C)", "t_max", "30"), ("SEUIL HYDRIQUE MIN (%)", "e_min", "40")]
         dict_e = {}
         for l, k, def_val in inputs:
             tk.Label(f, text=l, font=("Segoe UI", 8, "bold"), bg=C["bg_card"], fg=C["text_muted"]).pack(anchor="w")
@@ -418,17 +435,17 @@ class PageDashboard(tk.Frame):
                 pop.destroy()
             except: pass
 
-        btn = tk.Button(f, text="COMMIT INITIALIZATION", command=save); ui_btn(btn); btn.pack(fill="x", pady=(10, 0), ipady=5)
+        btn = tk.Button(f, text="ENREGISTRER LE PROFIL", command=save); ui_btn(btn); btn.pack(fill="x", pady=(10, 0), ipady=5)
 
     def _api_pompe(self, state, manuel=False):
         self.pompe_on = state
-        self._write_log("OK" if state else "WRN", f"Statut Relais Pompe mis à jour -> {'ACTIF' if state else 'INACTIF'}")
+        self._write_log("OK" if state else "WRN", f"Relais Pompe -> {'ACTIF' if state else 'INACTIF'}")
         if manuel:
             threading.Thread(target=lambda: db.child("commandes").child(self.uid).update({"pompe": state}), daemon=True).start()
 
     def _api_ventilo(self, state, manuel=False):
         self.ventilo_on = state
-        self._write_log("OK" if state else "WRN", f"Statut Extraction Air mis à jour -> {'ACTIF' if state else 'INACTIF'}")
+        self._write_log("OK" if state else "WRN", f"Relais Ventilateur -> {'ACTIF' if state else 'INACTIF'}")
         if manuel:
             threading.Thread(target=lambda: db.child("commandes").child(self.uid).update({"ventilateur": state}), daemon=True).start()
 
@@ -454,7 +471,7 @@ class PageDashboard(tk.Frame):
         is_raining = not p
         self.g_pluie.set_status(is_raining)
 
-        self._write_log("INF", f"Synchronisation : Temp {t}°C | Sol {s}% | Pluie: {'Oui' if is_raining else 'Non'}")
+        self._write_log("INF", f"Données -> T°: {t}°C | Sol: {s}% | Pluie: {'Oui' if is_raining else 'Non'}")
 
         try:
             conn = get_db(); cur = conn.cursor()
@@ -467,7 +484,7 @@ class PageDashboard(tk.Frame):
                 if not self.pompe_on:
                     self.sw_pompe.set_state(True)
                     self._api_pompe(True, manuel=True)
-                    self._write_log("WRN", f"Hydrométrie critique ({s}% < {self.plante_active['eau_min']}%). Injection d'eau requise.")
+                    self._write_log("WRN", f"Sècheresse ({s}% < {self.plante_active['eau_min']}%). Activation Pompe.")
             elif s >= self.plante_active["eau_min"] + 10:
                 if self.pompe_on:
                     self.sw_pompe.set_state(False)
@@ -477,7 +494,7 @@ class PageDashboard(tk.Frame):
                 if not self.ventilo_on:
                     self.sw_ventilo.set_state(True)
                     self._api_ventilo(True, manuel=True)
-                    self._write_log("ERR", f"Surchauffe thermique ({t}°C > {self.plante_active['temp_max']}°C). Déclenchement extracteur d'air.")
+                    self._write_log("ERR", f"Surchauffe ({t}°C > {self.plante_active['temp_max']}°C). Activation Ventilation.")
             elif t <= self.plante_active["temp_max"] - 2:
                 if self.ventilo_on:
                     self.sw_ventilo.set_state(False)
@@ -490,8 +507,8 @@ class PageDashboard(tk.Frame):
             rows = cur.fetchall()
             for x in self.tree.get_children(): self.tree.delete(x)
             for r in rows:
-                t_str = r[0].strftime("%d/%m %H:%M:%S") if r[0] else "Unknown"
-                self.tree.insert("", "end", values=(t_str, f"{r[1]}°C", f"{r[2]}%", f"{r[3]}%", "OUI" if not r[4] else "NON"))
+                t_str = r[0].strftime("%d/%m/%Y %H:%M:%S") if r[0] else "Inconnu"
+                self.tree.insert("", "end", values=(t_str, f"{r[1]} °C", f"{r[2]} %", f"{r[3]} %", "Oui" if not r[4] else "Non"))
             cur.close(); conn.close()
         except: pass
         self.after(6000, self._boucle_stats)
@@ -517,7 +534,7 @@ class PageDashboard(tk.Frame):
 class App:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("Nexus Ecosystem Core")
+        self.root.title("EcoSphere OS")
         self.root.geometry("1260x860")
         self.root.configure(bg=C["bg_main"])
         self.root.resizable(False, False)
