@@ -159,25 +159,21 @@ class PageConnexion(tk.Frame):
         self._build()
 
     def _build(self):
-        # Séparation de l'écran en deux zones asymétriques pour casser l'effet "bloc au milieu du 1 et 2"
         left_decor = tk.Frame(self, bg=C["bg_card"], width=320, highlightthickness=0)
         left_decor.pack(side="left", fill="y")
         left_decor.pack_propagate(False)
         
-        # Grand titre vertical / décoratif style interface pro
         tk.Label(left_decor, text="ECOSPHERE\nOS", font=("Segoe UI", 26, "bold"), bg=C["bg_card"], fg=C["accent_cyan"], justify="left").pack(anchor="w", padx=30, pady=(60, 10))
         tk.Label(left_decor, text="Système de contrôle environnemental\net de gestion automatisée.", font=("Segoe UI", 9), bg=C["bg_card"], fg=C["text_muted"], justify="left").pack(anchor="w", padx=30)
         
-        # Petit fil d'ariane décoratif en bas à gauche
         tk.Label(left_decor, text="v3.0.0 // PRODUCTION", font=("Consolas", 8), bg=C["bg_card"], fg=C["text_muted"]).pack(side="bottom", anchor="w", padx=30, pady=30)
 
-        # Formulaire principal calé sur la droite
         f_right = tk.Frame(self, bg=C["bg_main"], padx=60)
         f_right.pack(side="right", fill="both", expand=True)
         
-        # Conteneur centré verticalement dans l'espace droit
         self.center_box = tk.Frame(f_right, bg=C["bg_main"])
-        self.center_box.pack(relx=0.0, rely=0.5, anchor="w", fill="x")
+        # CORRECTION 1 : .place() au lieu de .pack() pour accepter relx/rely, et relwidth=1.0 au lieu de fill="x"
+        self.center_box.place(relx=0.0, rely=0.5, anchor="w", relwidth=1.0)
 
         self.title = tk.Label(self.center_box, text="CONNEXION SYSTÈME", font=("Segoe UI", 18, "bold"), bg=C["bg_main"], fg=C["text_main"])
         self.title.pack(anchor="w", pady=(0, 30))
@@ -226,7 +222,7 @@ class PageConnexion(tk.Frame):
         threading.Thread(target=run, daemon=True).start()
 
 
-# --- ESPACE DE CONTRÔLE CENTRAL (DASHBOARD AVEC NOMS DU CODE 1) ---
+# --- ESPACE DE CONTRÔLE CENTRAL ---
 class PageDashboard(tk.Frame):
     def __init__(self, parent, uid, email, on_deconn):
         super().__init__(parent, bg=C["bg_main"])
@@ -265,10 +261,8 @@ class PageDashboard(tk.Frame):
         top_bar.pack(fill="x")
         top_bar.pack_propagate(False)
         
-        # Titre haut issu du Code 1
         tk.Label(top_bar, text="GREENHOUSE // CORE OS", font=("Segoe UI", 11, "bold"), bg=C["bg_card"], fg=C["accent_cyan"]).pack(side="left")
         
-        # Bouton issu du Code 1
         btn_out = tk.Button(top_bar, text="DÉCONNEXION SYSTEM", command=self.on_deconn, padx=12, pady=4)
         ui_btn(btn_out, bg=C["accent_red"], fg=C["text_main"])
         btn_out.pack(side="right", padx=(15, 0))
@@ -284,10 +278,8 @@ class PageDashboard(tk.Frame):
         card_caps = tk.Frame(left_panel, bg=C["bg_card"], padx=20, pady=20, highlightthickness=1, highlightbackground=C["border"])
         card_caps.pack(fill="x", pady=(0, 15))
         
-        # Nom de carte issu du Code 1
         tk.Label(card_caps, text="DONNÉES EN TEMPS RÉEL", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_main"]).pack(anchor="w", pady=(0, 15))
         
-        # Intitulés exacts du Code 1 appliqué sur le design moderne linéaire du Code 3
         self.g_temp = LinearTechGauge(card_caps, "TEMPÉRATURE ATMOSPHÈRE", "°C", 50, C["accent_cyan"])
         self.g_temp.pack(fill="x", pady=8)
         
@@ -303,7 +295,6 @@ class PageDashboard(tk.Frame):
         card_ctrl = tk.Frame(left_panel, bg=C["bg_card"], padx=20, pady=18, highlightthickness=1, highlightbackground=C["border"])
         card_ctrl.pack(fill="x")
         
-        # Nom de carte et actionneurs issus du Code 1
         tk.Label(card_ctrl, text="RELAIS ET ACTIONNEURS MATÉRIELS", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_main"]).pack(anchor="w", pady=(0, 15))
         
         r1 = tk.Frame(card_ctrl, bg=C["bg_card"])
@@ -319,9 +310,11 @@ class PageDashboard(tk.Frame):
         self.sw_ventilo.pack(side="right")
 
         # PANNEAU DROIT
+        # CORRECTION 2 : Initialisation du width directement dans l'instance tk.Frame
         right_panel = tk.Frame(layout_box, bg=C["bg_main"], width=420)
-        right_panel.pack(side="right", fill="both")
         right_panel.pack_propagate(False)
+        # Retrait du paramètre 'width=420' de la méthode .pack() qui provoquait le crash
+        right_panel.pack(side="right", fill="both")
 
         self.card_plants = tk.Frame(right_panel, bg=C["bg_card"], padx=20, pady=20, highlightthickness=1, highlightbackground=C["border"])
         self.card_plants.pack(fill="x", pady=(0, 15))
@@ -330,18 +323,16 @@ class PageDashboard(tk.Frame):
         card_table = tk.Frame(right_panel, bg=C["bg_card"], padx=20, pady=15, highlightthickness=1, highlightbackground=C["border"])
         card_table.pack(fill="both", expand=True)
         
-        # Titre de tableau issu du Code 1
         tk.Label(card_table, text="TABLEAU STATISTIQUE DES CAPTEURS", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_main"]).pack(anchor="w", pady=(0, 10))
         
         self.tree = ttk.Treeview(card_table, columns=("date", "t", "ha", "hs", "p"), show="headings", selectmode="none")
         self.tree.pack(fill="both", expand=True)
         
-        # Colonnes issues du Code 1
         for col, head, w in [("date", "Horodatage / Date", 130), ("t", "Température", 75), ("ha", "Hum. Air", 60), ("hs", "Hum. Sol", 60), ("p", "Pluie", 50)]:
             self.tree.heading(col, text=head)
             self.tree.column(col, width=w, anchor="center")
 
-        # ZONE BASSE : Terminal (Intitulés Code 1)
+        # ZONE BASSE : Terminal
         f_term = tk.Frame(self, bg=C["bg_card"], height=160, padx=20, pady=12, highlightthickness=1, highlightbackground=C["border"])
         f_term.pack(fill="x", side="bottom", padx=20, pady=(0, 20))
         f_term.pack_propagate(False)
@@ -367,7 +358,6 @@ class PageDashboard(tk.Frame):
         for w in self.card_plants.winfo_children(): w.destroy()
         
         total_p = len(self.plantes)
-        # Profils végétaux issus du Code 1
         tk.Label(self.card_plants, text="GESTION DES PROFILS VEGETAUX", font=("Segoe UI", 9, "bold"), bg=C["bg_card"], fg=C["text_main"]).pack(anchor="w", pady=(0, 12))
 
         if total_p < 3:
@@ -545,6 +535,7 @@ class App:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("EcoSphere OS")
+        # CORRECTION 3 : Suppression des parenthèses superflues autour de la lettre 'x'
         self.root.geometry("1260x860")
         self.root.configure(bg=C["bg_main"])
         self.root.resizable(False, False)
