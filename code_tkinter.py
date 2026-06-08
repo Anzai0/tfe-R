@@ -94,7 +94,7 @@ class PageConnexion(tk.Frame):
         wrap = tk.Frame(self, bg=C["fond"])
         wrap.place(relx=0.5, rely=0.5, anchor="center")
 
-        tk.Label(wrap, text="◈ SERRE CONNECTEE",
+        tk.Label(wrap, text="SERRE CONNECTEE",
                  font=("Courier", 22, "bold"),
                  bg=C["fond"], fg=C["accent"]).pack(pady=(0, 4))
         tk.Label(wrap, text="Systeme de monitoring IoT",
@@ -105,7 +105,7 @@ class PageConnexion(tk.Frame):
         card = tk.Frame(wrap, bg=C["carte"], padx=30, pady=30)
         card.pack(ipadx=10, ipady=10)
 
-        self.lbl_titre = tk.Label(card, text="[ SE CONNECTER ]",
+        self.lbl_titre = tk.Label(card, text=" SE CONNECTER ",
                                    font=("Courier", 14, "bold"),
                                    bg=C["carte"], fg=C["texte"])
         self.lbl_titre.pack(pady=(0, 20))
@@ -124,7 +124,7 @@ class PageConnexion(tk.Frame):
                                  bg=C["carte"], fg=C["rouge"])
         self.lbl_msg.pack()
 
-        self.btn_ok = tk.Button(card, text="[ SE CONNECTER ]",
+        self.btn_ok = tk.Button(card, text=" SE CONNECTER ",
                                  command=self._action, pady=10)
         bs(self.btn_ok, sz=11)
         self.btn_ok.pack(fill="x", pady=(10, 6))
@@ -140,20 +140,20 @@ class PageConnexion(tk.Frame):
     def _switch(self):
         if self.mode == "connexion":
             self.mode = "inscription"
-            self.lbl_titre.configure(text="[ CREER UN COMPTE ]")
-            self.btn_ok.configure(text="[ CREER UN COMPTE ]")
+            self.lbl_titre.configure(text=" CREER UN COMPTE ")
+            self.btn_ok.configure(text=" CREER UN COMPTE ")
             self.btn_switch.configure(text="Deja un compte ? Se connecter")
         else:
             self.mode = "connexion"
-            self.lbl_titre.configure(text="[ SE CONNECTER ]")
-            self.btn_ok.configure(text="[ SE CONNECTER ]")
+            self.lbl_titre.configure(text=" SE CONNECTER ")
+            self.btn_ok.configure(text=" SE CONNECTER ")
             self.btn_switch.configure(text="Pas de compte ? Creer un compte")
 
     def _action(self):
         email = self.e_email.get().strip()
         mdp   = self.e_mdp.get().strip()
         if not email or not mdp:
-            self.lbl_msg.configure(text="[!] Remplissez tous les champs")
+            self.lbl_msg.configure(text="!Remplissez tous les champs")
             return
         self.btn_ok.configure(text="...", state="disabled")
         self.lbl_msg.configure(text="")
@@ -169,10 +169,10 @@ class PageConnexion(tk.Frame):
             except Exception as e:
                 s   = str(e)
                 msg = "[!] Email ou mot de passe incorrect"
-                if   "EMAIL_EXISTS"  in s: msg = "[!] Email deja utilise"
-                elif "WEAK_PASSWORD" in s: msg = "[!] Mot de passe trop court (6 min)"
-                elif "INVALID_EMAIL" in s: msg = "[!] Email invalide"
-                t = "[ SE CONNECTER ]" if self.mode == "connexion" else "[ CREER UN COMPTE ]"
+                if   "EMAIL_EXISTS"  in s: msg = "! Email deja utilise"
+                elif "WEAK_PASSWORD" in s: msg = "! Mot de passe trop court (6 min)"
+                elif "INVALID_EMAIL" in s: msg = "! Email invalide"
+                t = " SE CONNECTER " if self.mode == "connexion" else " CREER UN COMPTE "
                 self.after(0, lambda: [
                     self.lbl_msg.configure(text=msg),
                     self.btn_ok.configure(text=t, state="normal")
@@ -225,7 +225,7 @@ class PageDashboard(tk.Frame):
         header = tk.Frame(self, bg=C["fond2"], pady=12, padx=20)
         header.pack(fill="x")
 
-        tk.Label(header, text="◈ SERRE CONNECTEE",
+        tk.Label(header, text=" SERRE CONNECTEE",
                  font=("Courier", 16, "bold"),
                  bg=C["fond2"], fg=C["accent"]).pack(side="left")
 
@@ -234,7 +234,7 @@ class PageDashboard(tk.Frame):
         bs(btn_deconn, bg=C["rouge"], fg=C["texte"])
         btn_deconn.pack(side="right")
 
-        self.lbl_connexion = tk.Label(header, text="● CONNEXION...",
+        self.lbl_connexion = tk.Label(header, text=" CONNEXION...",
                                        font=("Courier", 9),
                                        bg=C["fond2"], fg=C["orange"])
         self.lbl_connexion.pack(side="right", padx=14)
@@ -361,7 +361,7 @@ class PageDashboard(tk.Frame):
                  font=("Courier", 10, "bold"),
                  bg=C["carte"], fg=C["accent"]).pack(side="left")
 
-        self.lbl_auto = tk.Label(auto_row, text="[OFF]",
+        self.lbl_auto = tk.Label(auto_row, text="OFF",
                                   font=("Courier", 10, "bold"),
                                   bg=C["carte"], fg=C["rouge"])
         self.lbl_auto.pack(side="left", padx=10)
@@ -390,7 +390,7 @@ class PageDashboard(tk.Frame):
                             font=("Courier", 13, "bold"),
                             bg=C["carte2"], fg=C["rouge"])
             lbl.pack(pady=8)
-            btn = tk.Button(c, text="[ACTIVER]", command=tog, pady=7)
+            btn = tk.Button(c, text="ACTIVER", command=tog, pady=7)
             bs(btn)
             btn.pack(fill="x")
             setattr(self, lbl_a, lbl)
@@ -408,8 +408,8 @@ class PageDashboard(tk.Frame):
                 self.mode_auto = False
                 return
 
-            self.lbl_auto.configure(text="[ON]", fg=C["vert"])
-            self.btn_auto.configure(text="[DESACTIVER AUTO]",
+            self.lbl_auto.configure(text="ON", fg=C["vert"])
+            self.btn_auto.configure(text="DESACTIVER AUTO",
                                      bg=C["rouge"], fg=C["texte"])
             self.btn_pompe.configure(state="disabled",
                                       bg=C["gris2"], fg=C["gris"])
@@ -417,8 +417,8 @@ class PageDashboard(tk.Frame):
                                         bg=C["gris2"], fg=C["gris"])
             self._log("OK", f"Mode AUTO active → plante: {self.plante_active['nom']}")
         else:
-            self.lbl_auto.configure(text="[OFF]", fg=C["rouge"])
-            self.btn_auto.configure(text="[ACTIVER AUTO]",
+            self.lbl_auto.configure(text="OFF", fg=C["rouge"])
+            self.btn_auto.configure(text="ACTIVER AUTO",
                                      bg=C["accent"], fg=C["fond"])
             self.btn_pompe.configure(state="normal",
                                       bg=C["accent"], fg=C["fond"])
@@ -451,13 +451,13 @@ class PageDashboard(tk.Frame):
         self.pompe_on = not self.pompe_on
         self._ignore_sync_until = time.time() + 3
         if self.pompe_on:
-            self.lbl_pompe.configure(text="[ON]",  fg=C["vert"])
-            self.btn_pompe.configure(text="[DESACTIVER]",
+            self.lbl_pompe.configure(text="ON",  fg=C["vert"])
+            self.btn_pompe.configure(text="DESACTIVER",
                                       bg=C["rouge"], fg=C["texte"])
             self._log("OK", "Pompe activee manuellement")
         else:
-            self.lbl_pompe.configure(text="[OFF]", fg=C["rouge"])
-            self.btn_pompe.configure(text="[ACTIVER]",
+            self.lbl_pompe.configure(text="OFF", fg=C["rouge"])
+            self.btn_pompe.configure(text="ACTIVER",
                                       bg=C["accent"], fg=C["fond"])
             self._log("WARN", "Pompe desactivee manuellement")
         threading.Thread(
@@ -473,13 +473,13 @@ class PageDashboard(tk.Frame):
         self.ventilo_on = not self.ventilo_on
         self._ignore_sync_until = time.time() + 3 
         if self.ventilo_on:
-            self.lbl_ventilo.configure(text="[ON]",  fg=C["vert"])
-            self.btn_ventilo.configure(text="[DESACTIVER]",
+            self.lbl_ventilo.configure(text="ON",  fg=C["vert"])
+            self.btn_ventilo.configure(text="DESACTIVER",
                                         bg=C["rouge"], fg=C["texte"])
             self._log("OK", "Ventilateur active manuellement")
         else:
-            self.lbl_ventilo.configure(text="[OFF]", fg=C["rouge"])
-            self.btn_ventilo.configure(text="[ACTIVER]",
+            self.lbl_ventilo.configure(text="OFF", fg=C["rouge"])
+            self.btn_ventilo.configure(text="ACTIVER",
                                         bg=C["accent"], fg=C["fond"])
             self._log("WARN", "Ventilateur desactive manuellement")
         threading.Thread(
@@ -527,7 +527,7 @@ class PageDashboard(tk.Frame):
                      fg=C["vert"] if actif else C["texte"]).pack(side="left")
 
             if actif:
-                tk.Label(titre_row, text="[ ACTIVE ]",
+                tk.Label(titre_row, text=" ACTIVE ",
                          font=("Courier", 8, "bold"),
                          bg=ibg, fg=C["vert"]).pack(side="right")
 
@@ -544,7 +544,7 @@ class PageDashboard(tk.Frame):
             btns = tk.Frame(inner, bg=ibg)
             btns.pack(fill="x", pady=(8, 0))
             if not actif:
-                b = tk.Button(btns, text="[SELECT]",
+                b = tk.Button(btns, text="SELECT",
                                command=lambda pl=p: self._select(pl),
                                pady=4, padx=8)
                 bs(b, sz=9)
@@ -626,7 +626,7 @@ class PageDashboard(tk.Frame):
             self._log("OK", f"Plante ajoutee: {nom}")
             pop.destroy()
 
-        btn = tk.Button(card, text="[AJOUTER]", command=save, pady=10)
+        btn = tk.Button(card, text="AJOUTER", command=save, pady=10)
         bs(btn, sz=11)
         btn.pack(fill="x", pady=(8, 0))
 
@@ -643,8 +643,8 @@ class PageDashboard(tk.Frame):
 
         # Restaurer état AUTO après rebuild
         if self.mode_auto:
-            self.lbl_auto.configure(text="[ON]", fg=C["vert"])
-            self.btn_auto.configure(text="[DESACTIVER AUTO]",
+            self.lbl_auto.configure(text="ON", fg=C["vert"])
+            self.btn_auto.configure(text="DESACTIVER AUTO",
                                      bg=C["rouge"], fg=C["texte"])
             self.btn_pompe.configure(state="disabled",
                                       bg=C["gris2"], fg=C["gris"])
@@ -706,15 +706,15 @@ class PageDashboard(tk.Frame):
                     self._save_db(d)
                     self.after(0, self._sync_actionneurs, d)
                     self.after(0, lambda: self.lbl_connexion.configure(
-                        text="● CAPTEURS", fg=C["vert"]))
+                        text="CAPTEURS", fg=C["vert"]))
                 else:
                     self._log("WARN", "Aucune donnee Firebase")
                     self.after(0, lambda: self.lbl_connexion.configure(
-                        text="● EN ATTENTE", fg=C["orange"]))
+                        text=" EN ATTENTE", fg=C["orange"]))
             except Exception as e:
                 self._log("ERROR", f"Firebase: {e}")
                 self.after(0, lambda: self.lbl_connexion.configure(
-                    text="● ERREUR", fg=C["rouge"]))
+                    text=" ERREUR", fg=C["rouge"]))
             self.after(2000, self._rafraichir_poll)
         threading.Thread(target=tache, daemon=True).start()
 
@@ -730,24 +730,24 @@ class PageDashboard(tk.Frame):
         if pompe_on:
             self.lbl_pompe.configure(text="[ON]",  fg=C["vert"])
             if not self.mode_auto:
-                self.btn_pompe.configure(text="[DESACTIVER]",
+                self.btn_pompe.configure(text="DESACTIVER",
                                           bg=C["rouge"], fg=C["texte"])
         else:
-            self.lbl_pompe.configure(text="[OFF]", fg=C["rouge"])
+            self.lbl_pompe.configure(text="OFF", fg=C["rouge"])
             if not self.mode_auto:
-                self.btn_pompe.configure(text="[ACTIVER]",
+                self.btn_pompe.configure(text="ACTIVER",
                                           bg=C["accent"], fg=C["fond"])
         self.pompe_on = pompe_on
 
         if ventilo_on:
-            self.lbl_ventilo.configure(text="[ON]",  fg=C["vert"])
+            self.lbl_ventilo.configure(text="ON",  fg=C["vert"])
             if not self.mode_auto:
-                self.btn_ventilo.configure(text="[DESACTIVER]",
+                self.btn_ventilo.configure(text="DESACTIVER",
                                             bg=C["rouge"], fg=C["texte"])
         else:
-            self.lbl_ventilo.configure(text="[OFF]", fg=C["rouge"])
+            self.lbl_ventilo.configure(text="OFF", fg=C["rouge"])
             if not self.mode_auto:
-                self.btn_ventilo.configure(text="[ACTIVER]",
+                self.btn_ventilo.configure(text="ACTIVER",
                                             bg=C["accent"], fg=C["fond"])
         self.ventilo_on = ventilo_on
 
@@ -816,11 +816,11 @@ class PageDashboard(tk.Frame):
             p = self.plante_active
             if temp > p["temp_max"]:
                 self._log("WARN",
-                           f"[ALERTE] {p['nom']} : Temperature trop haute ! "
+                           f"ALERTE {p['nom']} : Temperature trop haute ! "
                            f"({temp}C > {p['temp_max']}C)")
             if isinstance(hum, (int, float)) and hum < p["humidite_min"]:
                 self._log("WARN",
-                           f"[ALERTE] {p['nom']} : Humidite trop basse ! "
+                           f"ALERTE {p['nom']} : Humidite trop basse ! "
                            f"({hum}% < {p['humidite_min']}%)")
             if isinstance(sol, (int, float)) and sol < p["eau_min"]:
                 self._log("WARN",
