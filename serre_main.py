@@ -288,4 +288,3 @@ finally:
     if uid:
         reset_commandes_firebase(uid)
     print("Systeme arrete")
-
