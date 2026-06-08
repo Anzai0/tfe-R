@@ -1,7 +1,4 @@
 # -*- coding: utf-8 -*-
-# code principal de la serre connectee
-# gere les capteurs, le lcd, le buzzer et firebase
-
 import time
 import board
 import busio
@@ -18,7 +15,7 @@ import json
 
 os.environ['GPIOZERO_PIN_FACTORY'] = 'rpigpio'
 
-# infos pour se connecter a firebase
+# ─── Firebase ─────────────────────────────────────────────
 firebase_config = {
     "apiKey": "AIzaSyA8zkZrgGnxJzDTxCr3-gZ96DuGAn5B-OE",
     "authDomain": "serre-connecte-60616.firebaseapp.com",
@@ -28,286 +25,273 @@ firebase_config = {
     "appId": "1:217991792040:web:ae6fd4a5e0953418aec99d",
     "databaseURL": "https://serre-connecte-60616-default-rtdb.europe-west1.firebasedatabase.app"
 }
-
 firebase = pyrebase.initialize_app(firebase_config)
-auth_fb = firebase.auth()
-db = firebase.database()
+auth_fb  = firebase.auth()
+db       = firebase.database()
 
-CONFIG_FILE = "config.json"
-
-# je charge la config sauvegardee si elle existe
-def charger_config():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as f:
-            return json.load(f)
-    return None
-
-# je sauvegarde l'email et le mot de passe pour pas les retaper
-def sauvegarder_config(email, password):
-    with open(CONFIG_FILE, "w") as f:
-        json.dump({"email": email, "password": password}, f)
-
-# connexion a firebase
+# ─── Connexion Firebase ───────────────────────────────────
 def connect_firebase():
-    config = charger_config()
-    if config:
-        print("=== Utilisateur connecte : " + config['email'] + " ===")
-    else:
-        print("=== Premiere connexion ===")
-        email = input("Email    : ")
-        password = input("Password : ")
-        sauvegarder_config(email, password)
-        config = {"email": email, "password": password}
+    print("=== Connexion Firebase ===")
+    email    = input("Email    : ")
+    password = input("Password : ")
     try:
-        user = auth_fb.sign_in_with_email_and_password(config["email"], config["password"])
-        uid = user["localId"]
-        print("[Firebase] Connecte : " + config['email'])
+        user = auth_fb.sign_in_with_email_and_password(email, password)
+        uid  = user["localId"]
+        print(f"[Firebase] Connecte : {email}")
         return uid
     except Exception as e:
-        print("[Firebase] Erreur: " + str(e))
-        os.remove(CONFIG_FILE)
+        print(f"[Firebase] Erreur: {e}")
         return connect_firebase()
 
-# je remet les commandes a zero quand on arrete le programme
 def reset_commandes_firebase(uid):
     try:
         db.child("commandes").child(uid).set({
-            "pompe": False,
+            "pompe":       False,
             "ventilateur": False,
-            "auto": False
+            "auto":        False
         })
         print("[Firebase] Commandes remises a zero")
     except Exception as e:
-        print("[Firebase] Erreur reset: " + str(e))
+        print(f"[Firebase] Erreur reset: {e}")
 
-# envoie les donnees des capteurs sur firebase
-def envoyer_donnees_firebase(uid, temp, hum, sol, pluie):
+def envoyer_firebase(uid, temp, hum, sol, pluie, etat_pompe, etat_ventilo):
     try:
-        db.child("capteurs").child(uid).set({
-            "temperature": temp,
-            "humidite_air": hum,
-            "humidite_sol": sol,
-            "pluie": pluie
-        })
+        data = {
+            "temperature":  temp if temp is not None else 0,
+            "humidite_air": hum  if hum  is not None else 0,
+            "humidite_sol": sol  if sol  is not None else 0,
+            "pluie":        bool(pluie),
+            "pompe":        etat_pompe   == "ON",
+            "ventilateur":  etat_ventilo == "ON",
+            "timestamp":    time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        db.child("capteurs").child(uid).set(data)
+        print("[Firebase] Donnees envoyees OK")
     except Exception as e:
-        print("[Firebase] Erreur envoi: " + str(e))
+        print(f"[Firebase] Erreur envoi: {e}")
 
-# je lis les commandes envoyees depuis l'application
 def lire_commandes_firebase(uid):
     try:
-        data = db.child("commandes").child(uid).get()
-        if data.val():
-            return data.val()
+        cmds = db.child("commandes").child(uid).get().val()
+        return cmds if cmds else {}
     except Exception as e:
-        print("[Firebase] Erreur lecture commandes: " + str(e))
-    return {}
+        print(f"[Firebase] Erreur lecture commandes: {e}")
+        return {}
 
-# je lis quelle plante est active et si le mode auto est active
 def lire_plante_active(uid):
     try:
-        data = db.child("commandes").child(uid).get()
-        if data.val():
-            vals = data.val()
-            mode_auto = bool(vals.get("auto", False))
-            plante = vals.get("plante_active", None)
-            return mode_auto, plante
+        cmds      = db.child("commandes").child(uid).get().val() or {}
+        mode_auto = bool(cmds.get("auto", False))
+        plante    = db.child("plantes_actives").child(uid).get().val()
+        return mode_auto, plante
     except Exception as e:
-        print("[Firebase] Erreur lecture plante: " + str(e))
-    return False, None
+        print(f"[Firebase] Erreur lecture plante: {e}")
+        return False, None
 
-# initialisation du capteur dht22 (temperature et humidite)
-def init_dht():
-    dht = adafruit_dht.DHT22(board.D4)
-    return dht
+# ─── Matériel ─────────────────────────────────────────────
+lcd = CharLCD('PCF8574', 0x27, cols=16, rows=2)
+dht = adafruit_dht.DHT11(board.D17, use_pulseio=False)
+time.sleep(2)
 
-# initialisation de l'ads1115 pour lire le capteur sol et pluie
+pompe = digitalio.DigitalInOut(board.D18)
+pompe.direction = digitalio.Direction.OUTPUT
+pompe.value = False
+
+ventilateur = digitalio.DigitalInOut(board.D23)
+ventilateur.direction = digitalio.Direction.OUTPUT
+ventilateur.value = False
+
+buzzer = TonalBuzzer(27)
+
 def init_ads():
     i2c = busio.I2C(board.SCL, board.SDA)
     ads = ADS.ADS1115(i2c)
-    capteur_pluie = AnalogIn(ads, ADS.P0)
-    capteur_sol = AnalogIn(ads, ADS.P1)
-    return capteur_pluie, capteur_sol
+    return AnalogIn(ads, 1), AnalogIn(ads, 0)
 
-# je configure la pompe et le ventilateur
-import gpiozero
-pompe = gpiozero.OutputDevice(17, active_high=True, initial_value=False)
-ventilateur = gpiozero.OutputDevice(27, active_high=True, initial_value=False)
-
-# le buzzer pour les alertes
-buzzer = TonalBuzzer(18)
-
-# l'ecran lcd
-lcd = CharLCD('PCF8574', 0x27)
-
-# je lance la connexion firebase
-uid = connect_firebase()
-reset_commandes_firebase(uid)
-
-# je configure le capteur dht
-dht = init_dht()
 capteur_pluie, capteur_sol = init_ads()
 
-# variables pour garder les dernieres valeurs si un capteur plante
-temp = None
-hum = None
-sol_last = 0
-pluie_last = False
-pourcentage_sol = 0
-pluie = False
+# ─── Variables ────────────────────────────────────────────
+ecran            = 0
+temp_last        = None
+hum_last         = None
+sol_last         = 0
+pluie_last       = False
+firebase_counter = 0
 
-# variables pour les commandes manuelles
-cmd_pompe_manuelle = False
-cmd_ventilo_manuelle = False
-mode_auto = False
-plante_active = None
-nom_plante = ""
+cmd_pompe_manuelle   = None
+cmd_ventilo_manuelle = None
+mode_auto            = False
+plante_active        = None
 
-ecran = 0  # pour changer ce qui s'affiche sur le lcd
+# ─── Connexion ────────────────────────────────────────────
+uid = connect_firebase()
+if uid:
+    reset_commandes_firebase(uid)
+else:
+    print("[WARN] Mode local uniquement")
 
-print("[Systeme] Demarrage...")
-
+# ─── Boucle principale ────────────────────────────────────
 try:
     while True:
 
-        # lecture du capteur temperature / humidite
+        # ── Lecture DHT11 ─────────────────────────────────
         try:
             temp = dht.temperature
-            hum = dht.humidity
+            hum  = dht.humidity
+            if temp is not None:
+                temp_last = temp
+            if hum is not None:
+                hum_last = hum
+        except RuntimeError:
+            temp = temp_last
+            hum  = hum_last
         except Exception:
-            pass  # je garde les anciennes valeurs si ca marche pas
+            temp = temp_last
+            hum  = hum_last
 
-        # lecture des capteurs analogiques (sol et pluie)
+        # ── Lecture ADS1115 ───────────────────────────────
         try:
-            valeur_pluie = capteur_pluie.value
-            valeur_sol = capteur_sol.value
+            valeur_pluie    = capteur_pluie.value
+            valeur_sol      = capteur_sol.value
             pourcentage_sol = round((1 - valeur_sol / 32767) * 100, 1)
-            pluie = valeur_pluie < 26500
-            sol_last = pourcentage_sol
-            pluie_last = pluie
+            pluie           = valeur_pluie < 26500
+            sol_last        = pourcentage_sol
+            pluie_last      = pluie
         except Exception:
             try:
                 capteur_pluie, capteur_sol = init_ads()
-            except:
+            except Exception:
                 pass
             pourcentage_sol = sol_last
-            pluie = pluie_last
+            pluie           = pluie_last
 
-        # je lis les commandes et la plante depuis firebase
+        # ── Lecture commandes + plante depuis Firebase ────
         if uid:
-            cmds = lire_commandes_firebase(uid)
-            mode_auto, plante_active = lire_plante_active(uid)
-
-            if not mode_auto:
-                # mode manuel : je lis ce que l'utilisateur a choisi dans l'app
-                if "pompe" in cmds:
-                    cmd_pompe_manuelle = bool(cmds["pompe"])
-                if "ventilateur" in cmds:
-                    cmd_ventilo_manuelle = bool(cmds["ventilateur"])
-            else:
-                # mode auto : les boutons manuels sont ignores
-                cmd_pompe_manuelle = None
-                cmd_ventilo_manuelle = None
-
-        # je recupere le nom de la plante active
-        if plante_active and isinstance(plante_active, dict):
-            nom_plante = plante_active.get("nom", "")
-        else:
-            nom_plante = ""
-
-        # logique automatique selon les seuils de la plante
-        if mode_auto and plante_active and isinstance(plante_active, dict):
-            temp_max = plante_active.get("temp_max", 30)
-            eau_min = plante_active.get("eau_min", 30)
-
-            # si trop chaud j'active le ventilateur
-            if temp and temp > temp_max:
-                ventilateur.on()
-                etat_ventilo = "ON"
-            else:
-                ventilateur.off()
-                etat_ventilo = "OFF"
-
-            # si le sol est trop sec j'active la pompe
-            if pourcentage_sol < eau_min:
-                pompe.on()
-                etat_pompe = "ON"
-            else:
-                pompe.off()
-                etat_pompe = "OFF"
-
-        else:
-            # mode manuel
-            if cmd_pompe_manuelle:
-                pompe.on()
-                etat_pompe = "ON"
-            else:
-                pompe.off()
-                etat_pompe = "OFF"
-
-            if cmd_ventilo_manuelle:
-                ventilateur.on()
-                etat_ventilo = "ON"
-            else:
-                ventilateur.off()
-                etat_ventilo = "OFF"
-
-        # j'envoie les donnees sur firebase
-        if uid and temp and hum:
-            envoyer_donnees_firebase(uid, temp, hum, pourcentage_sol, pluie)
-
-        # buzzer si temperature trop haute
-        if temp and temp > 35:
             try:
-                buzzer.play(Tone("A4"))
-                time.sleep(0.3)
-                buzzer.stop()
-            except:
-                pass
+                cmds = lire_commandes_firebase(uid)
+                mode_auto, plante_active = lire_plante_active(uid)
 
-        # affichage sur le lcd (je change d'ecran toutes les 2 secondes)
+                if not mode_auto:
+                    if "pompe" in cmds:
+                        cmd_pompe_manuelle = bool(cmds["pompe"])
+                    if "ventilateur" in cmds:
+                        cmd_ventilo_manuelle = bool(cmds["ventilateur"])
+                else:
+                    cmd_pompe_manuelle   = None
+                    cmd_ventilo_manuelle = None
+            except Exception as e:
+                print(f"[Firebase] Erreur lecture boucle: {e}")
+
+        # ── Seuils plante active ──────────────────────────
+        if plante_active:
+            seuil_sol  = plante_active.get("eau_min",      30)
+            seuil_hum  = plante_active.get("humidite_min", 60)
+            seuil_temp = plante_active.get("temp_max",     30)
+        else:
+            seuil_sol  = 30
+            seuil_hum  = 60
+            seuil_temp = 30
+
+        # ── Gestion Pompe ─────────────────────────────────
+        if cmd_pompe_manuelle is not None:
+            pompe.value = cmd_pompe_manuelle
+            etat_pompe  = "ON" if cmd_pompe_manuelle else "OFF"
+        else:
+            if pourcentage_sol < seuil_sol and not pluie:
+                pompe.value = True
+                etat_pompe  = "ON"
+            else:
+                pompe.value = False
+                etat_pompe  = "OFF"
+
+        # ── Gestion Ventilateur ───────────────────────────
+        if cmd_ventilo_manuelle is not None:
+            ventilateur.value = cmd_ventilo_manuelle
+            etat_ventilo      = "ON" if cmd_ventilo_manuelle else "OFF"
+        else:
+            if ((hum  is not None and hum  > seuil_hum) or
+                    (temp is not None and temp > seuil_temp)):
+                ventilateur.value = True
+                etat_ventilo      = "ON"
+            else:
+                ventilateur.value = False
+                etat_ventilo      = "OFF"
+
+        # ── Buzzer ────────────────────────────────────────
+        if temp is not None and temp > 35:
+            buzzer.play(Tone(2000))
+            time.sleep(0.5)
+            buzzer.stop()
+        else:
+            buzzer.stop()
+
+        # ── Envoi Firebase toutes les ~6s ─────────────────
+        firebase_counter += 1
+        if uid and firebase_counter >= 3:
+            envoyer_firebase(uid, temp, hum, pourcentage_sol,
+                             pluie, etat_pompe, etat_ventilo)
+            firebase_counter = 0
+
+        # ── Print console ─────────────────────────────────
+        nom_plante = plante_active["nom"] if plante_active else "aucune"
+        print("=" * 30)
+        print(f"Mode    : {'AUTO' if mode_auto else 'MANUEL'} ({nom_plante})")
+        print(f"Temp    : {temp}C"            if temp is not None else "Temp    : --")
+        print(f"Humidite: {hum}%"             if hum  is not None else "Humidite: --")
+        print(f"Sol     : {pourcentage_sol}%")
+        print(f"Pluie   : {'OUI' if pluie else 'NON'}")
+        print(f"Pompe   : {etat_pompe}")
+        print(f"Ventilo : {etat_ventilo}")
+        print("=" * 30)
+
+        # ── LCD ───────────────────────────────────────────
         try:
             lcd.clear()
             if ecran == 0:
-                if temp:
-                    lcd.write_string("T:" + str(round(temp, 1)) + "C")
-                else:
-                    lcd.write_string("T:--")
+                lcd.write_string(f"T:{temp:.1f}C" if temp is not None else "T:--")
                 lcd.cursor_pos = (1, 0)
-                if hum:
-                    lcd.write_string("Hum:" + str(round(hum, 1)) + "%")
-                else:
-                    lcd.write_string("H:--")
-
+                lcd.write_string(f"Hum:{hum:.1f}%" if hum is not None else "H:--")
             elif ecran == 1:
-                lcd.write_string("Sol:" + str(pourcentage_sol) + "%")
+                lcd.write_string(f"Sol:{pourcentage_sol}%")
                 lcd.cursor_pos = (1, 0)
-                if pluie:
-                    lcd.write_string("PLUIE!")
-                else:
-                    lcd.write_string("Pas de pluie")
-
+                lcd.write_string("PLUIE!" if pluie else "Pas de pluie")
             elif ecran == 2:
-                lcd.write_string("P:" + etat_pompe + " V:" + etat_ventilo)
+                lcd.write_string(f"P:{etat_pompe} V:{etat_ventilo}")
                 lcd.cursor_pos = (1, 0)
-                mode_txt = "AUTO" if mode_auto else "MAN"
-                plante_txt = nom_plante[:8] if nom_plante else "aucune"
-                lcd.write_string(mode_txt + " " + plante_txt)
-
+                lcd.write_string(
+                    f"{'AUTO' if mode_auto else 'MAN'} "
+                    f"{nom_plante[:8]}")
         except Exception as e:
-            print("[LCD] Erreur: " + str(e))
+            print(f"[LCD] Erreur: {e}")
 
         ecran = (ecran + 1) % 3
         time.sleep(2)
 
-# si on arrete le programme je remet tout a zero
+# ─── Arrêt propre ─────────────────────────────────────────
 finally:
-    pompe.off()
-    pompe.close()
-    ventilateur.off()
-    ventilateur.close()
-    buzzer.stop()
-    dht.exit()
-    lcd.clear()
+    try:
+        pompe.value = False
+        pompe.deinit()
+    except Exception:
+        pass
+    try:
+        ventilateur.value = False
+        ventilateur.deinit()
+    except Exception:
+        pass
+    try:
+        buzzer.stop()
+    except Exception:
+        pass
+    try:
+        dht.exit()
+    except Exception:
+        pass
+    try:
+        lcd.clear()
+    except Exception:
+        pass
     if uid:
         reset_commandes_firebase(uid)
     print("Systeme arrete")
+
